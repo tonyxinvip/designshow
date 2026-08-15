@@ -1,12 +1,12 @@
-# designshow
+# Tony's Trials
 
-辛海洋的视觉作品。生成艺术、动态图形、交互页面。
+辛海洋做的东西。能在浏览器里跑的那种。
 
 **站点** https://tonyxinvip.github.io/designshow/
 
 | 作品 | 发布 | 说明 |
 |---|---|---|
-| [万华镜生成器](kaleidoscope/) | 2026-08-15 | D<sub>N</sub> 镜像对称 + Droste 递归 + 粒子泼溅，可交互调参，导出 4K PNG |
+| [万华镜生成器](kaleidoscope/) | 2026-08-15 | 镜像对称 + 递归卷心 + 粒子泼溅。参数全露在外面，导出 4K PNG |
 
 ## 约定
 

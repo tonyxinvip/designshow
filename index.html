@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="辛海洋的视觉作品：生成艺术、动态图形、交互页面。">
-<title>designshow</title>
+<meta name="description" content="辛海洋做的东西。能在浏览器里跑的那种。">
+<title>Tony’s Trials</title>
 <style>
 /* ── 三态主题：裸 :root 定义完整浅色；两处只重定义 token ── */
 :root{
@@ -45,7 +45,7 @@ a{color:inherit}
 /* ── 报头 ── */
 header{padding:26px 0 0}
 .mast{display:flex;align-items:baseline;justify-content:space-between;gap:20px;flex-wrap:wrap}
-.mark{font:600 15px/1 var(--sans);letter-spacing:.30em;text-transform:uppercase}
+.mark{font:600 15px/1 var(--sans);letter-spacing:.24em;text-transform:uppercase}
 .mastmeta{font:400 12.5px/1.5 var(--mono);color:var(--sub);
   display:flex;gap:18px;flex-wrap:wrap;font-variant-numeric:tabular-nums}
 
@@ -107,15 +107,14 @@ footer{border-top:var(--rule);padding:22px 0 40px;display:flex;
 <div class="wrap">
   <header>
     <div class="mast">
-      <span class="mark">designshow</span>
+      <span class="mark">Tony’s Trials</span>
       <div class="mastmeta"><span>辛海洋</span><span>2026—</span></div>
     </div>
   </header>
 
   <section class="opening">
-    <h1 class="claim">看得见的东西，先做出来再说。</h1>
-    <p class="lede">一个存放视觉作品的地方。生成艺术、动态图形、交互页面，
-      每一件都能在浏览器里直接跑，代码开源。</p>
+    <h1 class="claim">做坏了也留着。</h1>
+    <p class="lede">这里的东西都能打开就跑。有的调得动，有的只是好看。代码都在。</p>
   </section>
 
   <main id="main" class="works">
@@ -129,9 +128,9 @@ footer{border-top:var(--rule);padding:22px 0 40px;display:flex;
       <div class="meta">
         <time class="when" datetime="2026-08-15">2026-08-15</time>
         <h2 class="wtitle"><a href="kaleidoscope/">万华镜生成器</a></h2>
-        <p class="wnote">真万华镜是两片夹角的镜子，反射必然成对，所以图案的对称群是
-          D<sub>N</sub> 而不是 C<sub>N</sub>。少掉镜像那一步，图就从万花筒塌成风车：
-          说不出哪里不对，但一眼就假。这件东西是把那一步做对之后的结果。</p>
+        <p class="wnote">万华镜是两片夹角的镜子，反射成对出现，所以对称群是
+          D<sub>N</sub>，不是 C<sub>N</sub>。少掉镜像那一步，图会塌成风车。
+          说不出哪里不对，但一眼就假。</p>
         <dl>
           <dt>形式</dt><dd>Canvas 生成艺术 · 可交互调参</dd>
           <dt>输出</dt><dd>3840 × 3840 PNG</dd>
@@ -143,9 +142,8 @@ footer{border-top:var(--rule);padding:22px 0 40px;display:flex;
 
   <section class="about">
     <h2>关于</h2>
-    <p>这里的作品都是自包含的单页：打开即跑，不发外部请求，断网也能看。
-      能调参的都把旋钮露在外面，参数本身就是作品的一部分。</p>
-    <p>方法与踩过的坑记在另一个仓库的 skill 里。这里只放能看的东西。</p>
+    <p>每个页面自包含。CSS、脚本、图都内联，断网能打开，不发外部请求。</p>
+    <p>能调的参数全部露在外面，没有藏起来的档位。</p>
   </section>
 
   <footer>
