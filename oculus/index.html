@@ -132,10 +132,13 @@ const SPEC=[
   ['offY',   'g-d','Centre offset', -40,  40, 1,   0,  v=>v+'%'],
 
   ['hue',    'g-c','Hue',             0, 360, 1, 208,  v=>v+'°'],
-  ['spread', 'g-c','Hue spread',      0, 120, 1,  52,  v=>v?'±'+Math.round(v/2)+'°':'one hue'],
+  ['spread', 'g-c','Hue spread',      0, 120, 1,  36,  v=>v?'±'+Math.round(v/2)+'°':'one hue'],
   ['sat',    'g-c','Saturation',      0, 100, 1,  46,  v=>v+'%'],
-  ['hueZ',   'g-c','Hue by depth',  -70,  70, 1,  30,  v=>v+'°'],
+  ['hueZ',   'g-c','Hue by depth',  -70,  70, 1,  20,  v=>v+'°'],
   ['tint',   'g-c','Paper tint',      0, 100, 1,  62,  v=>v+'%'],
+  ['hueRate','g-c','Drift speed',     0,  60, 1,  22,  v=>v?(240/v).toFixed(0)+'s / cycle':'held'],
+  ['hueRng', 'g-c','Drift range',     0, 180, 1,  58,  v=>v?'±'+v+'°':'fixed'],
+  ['hueJmp', 'g-c','Hue jumps',       0, 100, 1,  30,  v=>v?'±'+Math.round(v*0.42)+'°':'off'],
 
   ['jump',   'g-g','Jump rate',       0, 100, 1,  38,  v=>v?(v*0.028).toFixed(2)+'/s':'held'],
   ['reach',  'g-g','Jump size',       0, 180, 1,  76,  v=>v+'°'],
@@ -186,9 +189,33 @@ function hsl(h,sat,l){
    代价是 tone() 必须在画之前算，画面和底色一起翻。 */
 let INV=0;
 const LV=l=>INV?1-l:l;
+
+/* 颜色在动，两条路，正好对应画面已有的两种时间：
+
+   1. **漂移**——基准色相匀速绕一圈，慢到看不出在动、回头看已经换了一家人。
+      再叠一个互质频率的呼吸，免得漂移读起来像匀速扫描。
+   2. **跳变**——每圈跳角度的那一瞬间，色相也跳。用的是**同一个步号**，
+      所以颜色换、板条挪、钟响，是同一件事的三个面，不是三条各走各的轨道。
+
+   这件作品从一开始就是事件驱动的（第六节），颜色没有理由自己另开一套时钟。 */
+let HUE0=0;
+function hueBase(t){
+  if(reduce||P.hueRate<=0) return P.hue;
+  // **在色系内游走，不绕满一圈。** 匀速绕整个色轮听起来很美，实际会经过黄绿，
+  // 那时候画面已经不是「同一色系」了——蓝紫的一家人走着走着变成了另一家人。
+  // 所以用两个互质频率的正弦叠加，幅度封在 ±hueRng：走不腻，也走不出去。
+  const w=t*P.hueRate*0.0042*Math.PI*2;
+  return P.hue+(Math.sin(w)*0.62+Math.sin(w*0.618+1.7)*0.38)*P.hueRng;
+}
+function deckHue(i,t){
+  if(P.hueJmp<=0||reduce) return 0;
+  const rate=P.jump*0.028;
+  const s=rate>0?Math.floor(t*rate+decks[i].jitter*7):0;   // 与 deckAngle 同一个步号
+  return (h2(i+71,s)-0.5)*2*P.hueJmp*0.42;
+}
 function paper(){
   if(!P.colour) return [255,255,255];
-  return hsl(P.hue+P.hueZ*0.35, P.sat/100*0.30*(P.tint/100), 0.90-0.14*(1-P.tint/100));
+  return hsl(HUE0+P.hueZ*0.35, P.sat/100*0.30*(P.tint/100), 0.90-0.14*(1-P.tint/100));
 }
 
 /* 可复现随机 */
@@ -259,6 +286,11 @@ function build(){
     decks.push({
       f0,f1,n,unit,
       phase:(i%2)*Math.PI/n,                                   // 相邻环错半格，不是随机
+      // 每圈自己的跳变时钟相位。三维重写时漏掉过一次，后果是：
+      // deckAngle 里 t*rate+undefined*7 = NaN，角度恒定，**跳变整个死掉**；
+      // 而 tick 的判据 s!==lastStep[i] 因为 NaN!==NaN 恒为真，铃声反而每帧都在触发，
+      // 只被限流挡着。画面静止、声音照响，两边的症状互相掩护，肉眼看不出来。
+      jitter:r(),
       drum:f0>1,
       // 越靠 apex 越远、越暗。第一版所有环一样亮，画面没有纵深，
       // 只有一堆同样亮的同心带——这一项比任何模糊或密度渐变都管用。
@@ -388,6 +420,7 @@ function domePt(u,th,rho){
 
 function drawScene(g,t,R,cx,cy,T){
   INV=T.inv;
+  HUE0=hueBase(t);
   g.setTransform(1,0,0,1,0,0);
   const bg=INV?paper():[0,0,0];
   g.fillStyle=`rgb(${bg[0]},${bg[1]},${bg[2]})`; g.fillRect(0,0,sc.width,sc.height);
@@ -437,6 +470,7 @@ function collectRing(d,idx,t,R,F,L){
   const step=Math.PI*2/d.n;
   const w=step*(P.fill/100*(1-sm)+0.99*sm)*0.5;
   const th=1-P.thick/100;
+  const hOff=deckHue(idx,t); d.hOff=hOff;
   const proj=v=>{const s=F/v[2];return [v[0]*s,v[1]*s]};
 
   for(let j=0;j<d.n;j++){
@@ -466,7 +500,7 @@ function collectRing(d,idx,t,R,F,L){
       const N=f[4];
       const sh=Math.max(0,-(N[0]*L[0]+N[1]*L[1]+N[2]*L[2]));
       const v=Math.min(1,base*(0.20+0.90*sh));
-      FACES.push({q,z:f[5],c:shade(v,d,u)});
+      FACES.push({q,z:f[5],c:shade(v,d,u,hOff)});
     }
   }
 }
@@ -474,10 +508,10 @@ function collectRing(d,idx,t,R,F,L){
 /* 明度来自打光，色相来自「这根板条是谁 + 它在多深处」。
    两件事分开：颜色不承载形体，形体全靠明度——所以加了颜色，立体感一点没丢。
    量化到 24 级明度 × 16 级色相，只是为了让排序后能按颜色合并路径。 */
-function shade(v,d,u){
+function shade(v,d,u,hOff){
   const L=Math.round(v*24)/24;
   if(!P.colour){const c=Math.round(LV(L)*255);return (c<<16)|(c<<8)|c}
-  const h=P.hue + P.spread*0.5*d.hueJ[u] + P.hueZ*(d.hueZ-0.5)*2;
+  const h=HUE0 + hOff + P.spread*0.5*d.hueJ[u] + P.hueZ*(d.hueZ-0.5)*2;
   const hq=Math.round(h/22.5)*22.5;
   // 亮的地方去饱和：物理上高光趋近光源色，画面上也不至于亮部糊成一片纯色
   const st=P.sat/100*(1-Math.pow(L,2.2)*0.72);
@@ -501,7 +535,7 @@ function area(q){
 
 function strokeHoop(g,d,R,F){
   const rho=1-P.thick/100;
-  const hc=P.colour?hsl(P.hue+P.hueZ*(d.hueZ-0.5)*2,P.sat/100*0.30,LV(0.86)):[LV(1)*255,LV(1)*255,LV(1)*255];
+  const hc=P.colour?hsl(HUE0+d.hOff+P.hueZ*(d.hueZ-0.5)*2,P.sat/100*0.30,LV(0.86)):[LV(1)*255,LV(1)*255,LV(1)*255];
   g.strokeStyle=`rgba(${hc[0]},${hc[1]},${hc[2]},.5)`;
   g.lineWidth=Math.max(0.8,d.hoopW*R);
   for(const f of [d.f0,d.f1]){
@@ -521,7 +555,7 @@ function drawStreaks(g,d,a0,step,w,R,F){
   const len=(d.f1-d.f0)*(1.0+st*6.0);
   for(let k=0;k<SEG;k++){
     const g0=k/SEG, g1=(k+1)/SEG;
-    const sc2=P.colour?hsl(P.hue+P.hueZ*0.5,P.sat/100*0.34,LV(0.90)):[LV(1)*255,LV(1)*255,LV(1)*255];
+    const sc2=P.colour?hsl(HUE0+d.hOff+P.hueZ*0.5,P.sat/100*0.34,LV(0.90)):[LV(1)*255,LV(1)*255,LV(1)*255];
     g.fillStyle=`rgba(${sc2[0]},${sc2[1]},${sc2[2]},${(0.50*st+0.14)*(1-g0)*(1-g0)})`;
     g.beginPath();
     for(let j=0;j<d.n;j++){
@@ -578,7 +612,7 @@ function drawSphere(g,t,R,F,L){
   drawStruts(g,rs,kRef,lum,false);
   if(P.lamp){
     const lr=rs*kRef*0.40*(1+glowNow*0.20);
-    const lc=P.colour?hsl(P.hue-30,P.sat/100*0.16,LV(0.97)):[LV(1)*255,LV(1)*255,LV(1)*255];
+    const lc=P.colour?hsl(HUE0-30,P.sat/100*0.16,LV(0.97)):[LV(1)*255,LV(1)*255,LV(1)*255];
     g.fillStyle=`rgb(${lc[0]},${lc[1]},${lc[2]})`;
     g.beginPath(); g.arc(0,CY*kRef,lr,0,6.2832); g.fill();
   }
@@ -590,7 +624,7 @@ let sphereK=[1,1];
 /* 球比穹顶更冷一档：同一色系里往回退 30°，它才不会和穹顶糊在一起。 */
 function sphColour(v){
   if(!P.colour){const c=Math.min(255,(LV(v)*255)|0);return [c,c,c]}
-  return hsl(P.hue-30,P.sat/100*0.72*(1-Math.pow(v,2)*0.6),LV(0.05+v*0.90));
+  return hsl(HUE0-30,P.sat/100*0.72*(1-Math.pow(v,2)*0.6),LV(0.05+v*0.90));
 }
 function drawStruts(g,rs,kRef,lum,front){
   const E=sphereE, Pt=sphereP;
@@ -644,7 +678,7 @@ function drawBand(g,pts,front){
     for(let m=j;m>=i;m--) g.lineTo(pts[m][1][0],pts[m][1][1]);
     g.closePath(); i=j;
   }
-  const bc=P.colour?hsl(P.hue-30,P.sat/100*0.34,LV(0.93)):[LV(1)*255,LV(1)*255,LV(1)*255];
+  const bc=P.colour?hsl(HUE0-30,P.sat/100*0.34,LV(0.93)):[LV(1)*255,LV(1)*255,LV(1)*255];
   g.fillStyle=`rgba(${bc[0]},${bc[1]},${bc[2]},${front?0.90:0.26})`;
   g.fill();
 }
@@ -919,6 +953,15 @@ addEventListener('keydown',e=>{
 });
 
 resize(); build();
+// NaN 会让「跳变」静默失效且不报错，所以开页时自检一次：同一圈在一个周期内
+// 必须取到多于一个角度值。这条自检是上面那个 bug 换来的。
+(function selfcheck(){
+  if(!decks.length) return;
+  const seen=new Set();
+  for(let t=0;t<4;t+=0.05) seen.add(deckAngle(0,t));
+  if(P.jump>0 && !reduce && (seen.size<2 || [...seen].some(v=>!isFinite(v))))
+    console.error('跳变失效：deckAngle 在一个周期内没有变化或返回了非有限值');
+})();
 if(reduce) $('hint').textContent='Reduced motion is on: the jumps and the inversions are held still. Every control still works.';
 requestAnimationFrame(tick);
 </script>
