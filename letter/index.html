@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="一封朋友手写的信，做成会转的文字隧道。">
+<title>人生海海</title>
+<style>
+/* 单一深色主题：作品本身是黑底发光，浅色主题会毁掉它。
+   这是选择，不是遗漏——所以每个颜色都显式声明，不借宿主背景。 */
+:root{
+  --void:#05060A;    /* 页底：带一丝蓝偏的近黑，衬得画布的纯黑更深 */
+  --ink:#0C0F16;     /* 面板 */
+  --line:#1E2430;    /* 细线 */
+  --dim:#7C8798;     /* 次要文字，冷灰 */
+  --paper:#E9E4D8;   /* 正文：暖白，呼应笔记本纸 */
+  --gold:#E0B872;    /* 强调：取自动画里标题的金 */
+  --serif:"Songti SC","Noto Serif SC","Source Han Serif SC","STSong","SimSun",serif;
+  --sans:"PingFang SC","Noto Sans SC","Source Han Sans SC","Microsoft YaHei",
+         system-ui,-apple-system,"Helvetica Neue",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  background:var(--void); color:var(--paper);
+  font:15px/1.65 var(--sans);
+  display:flex; flex-direction:column; overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ---- 观看区 ---- */
+#stage{position:relative;flex:1;min-height:0;background:#000;overflow:hidden}
+#cv{position:absolute;inset:0;width:100%;height:100%;display:block;
+    touch-action:none;cursor:grab}
+#cv.drag{cursor:grabbing}
+#hint{position:absolute;left:16px;top:14px;color:var(--dim);font-size:12px;
+      letter-spacing:.06em;pointer-events:none;
+      transition:opacity .5s cubic-bezier(.32,.72,0,1)}
+#hint.gone{opacity:0}
+#back{position:absolute;left:16px;top:14px;z-index:6;color:var(--dim);font-size:12.5px;
+  text-decoration:none;letter-spacing:.04em}
+#back:hover{color:var(--paper)}
+#back:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.credit{color:var(--dim);font-size:12px;line-height:1.7;margin:18px 0 0;
+  padding-top:14px;border-top:1px solid var(--line)}
+.credit b{color:var(--paper);font-weight:500}
+.credit time{font-variant-numeric:tabular-nums}
+
+/* ---- 走带 ---- */
+#bar{flex:none;display:flex;align-items:center;gap:14px;
+     padding:11px 16px;background:var(--ink);border-top:1px solid var(--line)}
+#now{flex:1;min-width:0;font-family:var(--serif);font-size:17px;letter-spacing:.10em;
+     white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--paper)}
+#now.title{color:var(--gold)}
+#clock{flex:none;color:var(--dim);font-size:12px;font-variant-numeric:tabular-nums}
+.grp{flex:none;display:flex;gap:6px}
+button{
+  background:transparent;border:1px solid var(--line);color:var(--paper);
+  border-radius:4px;padding:8px 13px;font:500 13px/1 var(--sans);cursor:pointer;
+  transition:border-color .18s cubic-bezier(.32,.72,0,1),color .18s cubic-bezier(.32,.72,0,1);
+}
+button:hover{border-color:var(--gold);color:var(--gold)}
+button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+button[aria-pressed="true"]{border-color:var(--gold);color:var(--gold)}
+
+/* ---- 抽屉 ---- */
+#drawer{
+  position:absolute;top:0;right:0;bottom:0;width:min(320px,86%);
+  background:var(--ink);border-left:1px solid var(--line);
+  padding:20px 20px 32px;overflow-y:auto;
+  transform:translateX(100%);
+  transition:transform .3s cubic-bezier(.32,.72,0,1);
+}
+#drawer.open{transform:none}
+#drawer h2{font:400 13px/1 var(--sans);letter-spacing:.18em;color:var(--dim);
+           margin:0 0 14px;text-transform:uppercase}
+ol{list-style:none;margin:0 0 26px;padding:0;
+   display:flex;flex-direction:column;gap:2px}
+ol li{font-family:var(--serif);font-size:15px;letter-spacing:.08em;
+      color:var(--dim);padding:5px 9px;border-left:2px solid transparent;
+      cursor:pointer;transition:color .2s,border-color .2s}
+ol li:hover{color:var(--paper)}
+ol li[aria-current="true"]{color:var(--gold);border-left-color:var(--gold)}
+ol li:first-child{font-size:16px}
+label{display:block;margin:0 0 13px}
+.row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px}
+.row b{font-weight:500;font-size:12.5px;color:var(--paper)}
+.row span{color:var(--gold);font-size:12px;font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--gold);height:18px;margin:0;
+                  background:transparent}
+input[type=range]:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+.note{color:var(--dim);font-size:12px;margin:18px 0 0;padding-top:14px;
+      border-top:1px solid var(--line)}
+@media (prefers-reduced-motion:reduce){
+  #drawer,#hint,button{transition:none}
+}
+@media (max-width:600px){
+  #now{font-size:15px;letter-spacing:.06em}
+  button{padding:8px 10px;font-size:12.5px}
+  #bar{gap:9px;padding:9px 11px}
+}
+</style>
+
+<div id="stage">
+  <canvas id="cv"></canvas>
+  </head>
+<body>
+<a id="back" href="../">← Tony’s Trials</a>
+  <p id="hint">拖动画面可改变视角</p>
+  <aside id="drawer" aria-label="诗与参数">
+    <h2>全文</h2>
+    <ol id="toc"></ol>
+    <h2>调整</h2>
+    <div id="g"></div>
+    <p class="note">隧道的每一个背景字都取自这封信本身。</p>
+    <p class="credit">
+      文字：友人手书，经本人授权<br>
+      作品：<b>辛海洋</b><br>
+      <time datetime="2026-08-15">2026-08-15</time>
+    </p>
+  </aside>
+</div>
+
+<div id="bar">
+  <div class="grp">
+    <button id="play" aria-pressed="false">暂停</button>
+    <button id="prev" title="上一句">上一句</button>
+    <button id="next" title="下一句">下一句</button>
+  </div>
+  <div id="now"></div>
+  <div id="clock"></div>
+  <div class="grp">
+    <button id="toggle" aria-pressed="false" aria-controls="drawer">全诗 / 调整</button>
+  </div>
+</div>
+
+<script>
+const DEFAULT_POEM =
+`人生海海
+这么顺的日子
+不写点啥
+怪不好意思
+一想到未来七十年
+我将会无组织
+无纪律地过下去
+我就非常兴奋
+这或许就是
+人生可以重来一次
+的绝好机会
+我希望接下来
+的每一步都是喜欢
+不是衡量
+每一天都顺随本心
+不是困顿庸碌
+你们知道的
+我会也会邀请你们
+和我一起
+一直折腾一直美
+一路热忱一路逛
+岁岁安澜`;
+
+const SPEC=[
+  ['turn',  '环绕一周',    12, 180,  1,  84,  v=>v+'s'],
+  ['trad',  '句子半径',   .30,0.95,.01,0.60, v=>v.toFixed(2)],
+  ['tsize', '句子字号',   0.4, 2.0,.05, 0.90, v=>v.toFixed(2)],
+  ['flow',  '隧道流速',    -40,  60,  1,  11,  v=>v],
+  ['cols',  '每环字数',      16, 140,  1,  68,  v=>v],
+  ['rings', '环数',           8,  70,  1,  26,  v=>v],
+  ['gap',   '环间距',      1.03,1.28,.005,1.100,v=>v.toFixed(3)],
+  ['fill',  '字号占格比',   .35,1.30,.01,0.94, v=>v.toFixed(2)],
+  ['dens',  '纹理密度',      0, 100,  1, 100,  v=>v+'%'],
+  ['tex',   '纹理亮度',      0, 220,  1, 130,  v=>v+'%'],
+  ['flick', '闪烁强度',      0, 100,  1,  88,  v=>v+'%'],
+  ['bloom', '光晕',          0, 100,  1,  55,  v=>v+'%'],
+  ['fspd',  '闪烁速度',    0.2, 3.0,.05, 1.0,  v=>v.toFixed(2)+'×'],
+  ['core',  '中心黑洞',      0,  45,  1,  26,  v=>v+'%'],
+  ['squash','倾斜压扁',    .45,1.00,.01,0.94,  v=>v.toFixed(2)],
+  ['arcs',  '亮环密度',      0, 100,  1,  55,  v=>v+'%'],
+];
+const FLAGS=[['vertical','诗句竖排',true],['tangent','随圈朝向',false],['vig','暗角',true]];
+
+const P={};SPEC.forEach(([k,,,,,d])=>P[k]=d);FLAGS.forEach(([k,,d])=>P[k]=d);
+P.poem=DEFAULT_POEM; P.bsz=0.60; P.bal=0.90;   // 光晕半径系数 / 强度系数
+
+function hashStr(s){let h=2166136261>>>0;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)>>>0}return h>>>0}
+function mulberry32(a){return function(){a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const smooth=t=>t<=0?0:t>=1?1:t*t*(3-2*t);
+
+/* ---------- UI ---------- */
+const $=id=>document.getElementById(id);
+const ui={};
+const SHOW=new Set(['turn','trad','tsize','flow','cols','tex','flick','bloom','core','arcs']);
+for(const [k,label,min,max,step,def,fmt] of SPEC){
+  if(!SHOW.has(k))continue;
+  const l=document.createElement('label');
+  l.innerHTML=`<div class="row"><b>${label}</b><span></span></div>`;
+  const i=document.createElement('input');
+  i.type='range';i.min=min;i.max=max;i.step=step;i.value=def;
+  l.appendChild(i);$('g').appendChild(l);
+  const o=l.querySelector('span');o.textContent=fmt(def);
+  ui[k]=[i,o,fmt];
+  i.addEventListener('input',()=>{P[k]=parseFloat(i.value);o.textContent=fmt(P[k]);
+    if(k==='dens'||k==='cols'||k==='rings')buildField();
+    if(k==='cols'||k==='gap')cellHint()});
+}
+// 环向格宽 2π/cols 与径向格宽 (1-1/gap) 相等时格子是方的。
+// 列数多于此值 → 字在径向互相重叠 → 糊成一片而不是一格一格的亮块。踩过两次。
+function cellHint(){
+  const ideal=6.2832/(1-1/P.gap), ratio=P.cols/ideal;
+  (document.getElementById('cellHint')||{}).textContent=`方格列数 ≈ ${Math.round(ideal)}`+
+    (ratio>1.12?'（当前偏多：字径向重叠，会糊）':ratio<0.88?'（当前偏少：行间露黑缝）':'（当前接近方格）');
+}
+
+/* ---------- 精灵图：纹理层每个「字×色调」只光栅化一次 ---------- */
+const SPRITE_PX=84;
+const FONT_TEX=`700 %dpx "PingFang SC","Noto Sans SC","Source Han Sans SC","Microsoft YaHei","WenQuanYi Zen Hei",sans-serif`;
+const FONT=`"Songti SC","Noto Serif SC","Source Han Serif SC","STSong","SimSun","Noto Sans SC","PingFang SC","WenQuanYi Zen Hei",serif`;
+const TINTS=['#ffffff','#ffcf9a','#9fd0ff'];
+let sprites=[],lines=[];
+
+function tint(src,color){
+  const c=document.createElement('canvas');c.width=c.height=src.width;
+  const x=c.getContext('2d');x.drawImage(src,0,0);
+  x.globalCompositeOperation='source-in';x.fillStyle=color;x.fillRect(0,0,c.width,c.height);
+  return c;
+}
+function buildSprites(){
+  const chars=[...new Set([...P.poem].filter(c=>c.trim()))];
+  sprites=chars.map(ch=>{
+    const c=document.createElement('canvas');c.width=c.height=SPRITE_PX;
+    const x=c.getContext('2d');
+    x.font=FONT_TEX.replace('%d',Math.round(SPRITE_PX*0.86));
+    x.textAlign='center';x.textBaseline='middle';x.fillStyle='#fff';
+    x.fillText(ch,SPRITE_PX/2,SPRITE_PX*0.52);
+    return TINTS.map(t=>tint(c,t));
+  });
+}
+function parsePoem(){
+  lines=P.poem.split('\n').map(s=>s.trim()).filter(Boolean);
+}
+
+/* ---------- 纹理字阵 ---------- */
+const TWIST=0.5, Z_NEAR=0.32;
+let field=[];
+function buildField(){
+  const rnd=mulberry32(hashStr('poem-field'));
+  field=[];
+  const keep=P.dens/100;
+  for(let i=0;i<P.rings;i++)for(let j=0;j<P.cols;j++){
+    if(rnd()>keep){rnd();rnd();rnd();continue}      // 抽稀但保持随机流对齐
+    field.push({ring:i,
+      a:j/P.cols*Math.PI*2+i*TWIST*Math.PI/180+(rnd()-.5)*(Math.PI*2/P.cols)*0.10,
+      rj:1+(rnd()-.5)*0.02, s:(rnd()*1e9)|0, t:rnd(), b0:rnd(),
+      ph:rnd()*6.2832, w:(6.2832/1.9)*(0.55+0.9*rnd())});   // 实测：周期约 1.9s，各字异相
+  }
+}
+function rebuildAll(){parsePoem();buildSprites();buildField()}
+
+/* ---------- 渲染 ---------- */
+const cv=$('cv'),ctx=cv.getContext('2d');
+let W=0,H=0,DPR=1;
+function resize(){DPR=Math.min(2,window.devicePixelRatio||1);
+  W=cv.clientWidth;H=cv.clientHeight;cv.width=Math.round(W*DPR);cv.height=Math.round(H*DPR)}
+addEventListener('resize',resize);
+
+const cam={phase:0,panX:0,panY:0,tgX:0,tgY:0};
+let T=0, paused=false;
+const reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
+
+function render(g,w,h,dpr,p,t,cm){
+  g.setTransform(dpr,0,0,dpr,0,0);
+  g.fillStyle='#000';g.fillRect(0,0,w,h);
+  const cx=w/2+cm.panX, cy=h/2+cm.panY;
+  const f=Math.min(w,h)*0.5;
+  const diag=Math.hypot(w,h);
+
+  /* --- 纹理层 --- */
+  g.globalCompositeOperation='lighter';
+  const texA=p.tex/100;
+  for(let k=field.length-1;k>=0;k--){
+    const it=field[k];
+    const idx=(it.ring+cm.phase)%p.rings;
+    const z=Z_NEAR*Math.pow(p.gap,idx)*it.rj;
+    const r=f/z; if(r>diag)continue;
+    const px=cx+Math.cos(it.a)*r, py=cy+Math.sin(it.a)*r*p.squash;
+    if(px<-70||px>w+70||py<-70||py>h+70)continue;
+    const size=(6.2832*r/p.cols)*p.fill;
+    if(size<0.7)continue;
+    const far=idx/p.rings<0.88?1:Math.max(0,1-(idx/p.rings-0.88)/0.12);
+    // 每字独立呼吸：实测两两相关仅 0.06（各闪各的），明暗比中位 16×
+    const osc=0.5+0.5*Math.sin(t*it.w*p.fspd+it.ph);
+    // 陡曲线而非幂次：实测参考是「55% 死黑 + 12% 极亮」的双峰分布，
+    // 平滑幂次只会得到一片中灰。字大部分时间灭着，亮就亮到底。
+    const s0=(osc-0.42)/0.26, sc=s0<=0?0:s0>=1?1:s0*s0*(3-2*s0);
+    // 暗态必须有下限：实体装置里暗着的字仍然看得见。
+    // 归零会让直方图对上而画面变稀——统计量匹配不等于画面匹配。
+    const base=1-p.flick/100*0.82;
+    const fl=base+(1-base)*sc;
+    const a=Math.min(1,far*Math.min(1,size/2.2)*(1-0.45*Math.pow(it.b0,1.7))*fl)*texA;
+    if(a<=0.012)continue;
+    const set=sprites[it.s%sprites.length]; if(!set)continue;
+    const sz=Math.min(size,150), img=set[it.t<0.055?1:(it.t<0.095?2:0)];
+    // 亮起来的字要晕开：参考拍的是实体灯光装置，光晕才是亮像素的主要来源。
+    // 用同一张精灵放大一圈低透明度垫在下面，additive 叠加即得（比 shadowBlur 便宜得多）
+    if(a>0.42&&p.bloom>0){
+      const bs=sz*(1+p.bloom/100*p.bsz);
+      g.globalAlpha=a*p.bloom/100*p.bal;
+      g.drawImage(img,px-bs/2,py-bs/2,bs,bs);
+    }
+    g.globalAlpha=a;
+    g.drawImage(img,px-sz/2,py-sz/2,sz,sz);
+  }
+  g.globalAlpha=1;
+
+  /* --- 亮环 --- */
+  if(p.arcs>0){
+    const every=Math.max(2,Math.round(p.rings/(1+p.arcs/12)));
+    g.strokeStyle='rgba(228,242,255,.92)';
+    for(let i=0;i<p.rings;i+=every){
+      const idx=(i+cm.phase)%p.rings, r=f/(Z_NEAR*Math.pow(p.gap,idx));
+      if(r<6||r>diag)continue;
+      const a=(idx/p.rings<0.88?1:Math.max(0,1-(idx/p.rings-0.88)/0.12))*0.9;
+      const lw=Math.max(1.1,Math.min(6,r*0.0062));
+      g.beginPath();g.ellipse(cx,cy,r,r*p.squash,0,0,6.2832);
+      g.globalAlpha=a*0.13;g.lineWidth=lw*7;g.stroke();      // 辉光用两道描边，不用 shadowBlur
+      g.globalAlpha=a;g.lineWidth=lw;g.stroke();
+    }
+    g.globalAlpha=1;
+  }
+
+  /* --- 中心黑洞：压在纹理之上、诗句之下，诗句才像从洞里走出来 --- */
+  if(p.core>0){
+    // 洞的大小直接给比例：参考画面里它占了很大一块，靠环数推算出不来
+    const rc=Math.max(Math.min(w,h)*p.core/100,(f/(Z_NEAR*Math.pow(p.gap,p.rings-1)))*1.6);
+    g.globalCompositeOperation='source-over';
+    const rg=g.createRadialGradient(cx,cy,0,cx,cy,rc);
+    rg.addColorStop(0,'rgba(0,0,0,1)');rg.addColorStop(.5,'rgba(0,0,0,.9)');
+    rg.addColorStop(1,'rgba(0,0,0,0)');
+    g.fillStyle=rg;g.beginPath();g.ellipse(cx,cy,rc,rc*p.squash,0,0,6.2832);g.fill();
+  }
+
+  /* --- 读句层：转进来 → 读位 → 旋转着沉入黑洞 --- */
+  /* 每句走一条完整的弧：从外围淡入、绕行趋近正上方「读位」（最大最亮）、
+     越过读位后一边继续旋转一边向内收，最后消失在中心黑洞里。
+     只绕不收会显得有始无终——收束必须回到它出发的那个中心。 */
+  g.globalCompositeOperation='lighter';
+  const n=lines.length; if(!n)return;
+  const READ=-Math.PI/2;                          // 读位在正上方
+  // 沉入段/趋近段按「句位」计而不是按一周的固定比例：
+  // 写成固定比例时，句数一多同时可见的句子就成倍增加，暗底互相叠。
+  // 按句位计则任何句数下都只同时出现约六句。
+  const SINK=Math.min(0.42,2.6/n), APPR=Math.min(0.5,3.4/n);
+  const Rt=Math.min(w,h)*0.5*p.trad;
+  for(let i=0;i<n;i++){
+    const e=((i/n+t/Math.max(0.1,p.turn))%1+1)%1; // 0 = 正在读位，→1 = 即将回到读位
+    let rad,alpha,szf;
+    if(e<SINK){                                   // 读完，旋转着向内收，沉进黑洞
+      const k=smooth(e/SINK);
+      rad=p.trad*(1-k); alpha=1-k; szf=0.55+0.75*(1-k);
+    }else if(e>1-APPR){                           // 从外围转进来，趋近读位
+      const k=smooth((e-(1-APPR))/APPR);
+      rad=p.trad*(1.20-0.20*k); alpha=0.14+0.86*k; szf=0.52+0.78*k;
+    }else continue;                               // 其余时间不在场
+    if(alpha<=0.012)continue;
+
+    const ang=READ+e*Math.PI*2;
+    const R=Math.min(w,h)*0.5*rad;
+    const px=cx+Math.cos(ang)*R, py=cy+Math.sin(ang)*R*p.squash;
+    const isTitle=i===0;
+    const fs=Math.min(w,h)*0.030*p.tsize*szf*(isTitle?1.22:1);
+    if(fs<3)continue;
+    const txt=[...lines[i]];
+
+    // 字墙太密，焦点句要垫一块柔和暗底才读得出来；越沉越淡
+    if(alpha>0.10){
+      const br=Math.max(fs*1.5,fs*txt.length*1.24)*0.62;
+      g.globalCompositeOperation='source-over';
+      const bg=g.createRadialGradient(px,py,0,px,py,br);
+      bg.addColorStop(0,`rgba(0,0,0,${0.86*alpha})`);
+      bg.addColorStop(.62,`rgba(0,0,0,${0.55*alpha})`);
+      bg.addColorStop(1,'rgba(0,0,0,0)');
+      g.fillStyle=bg;g.beginPath();g.ellipse(px,py,br,br,0,0,6.2832);g.fill();
+      g.globalCompositeOperation='lighter';
+    }
+
+    g.save();
+    g.translate(px,py);
+    if(p.tangent)g.rotate(ang+Math.PI/2);         // 随圈朝向（底部会倒置）
+    g.font=`${isTitle?600:400} ${fs}px ${FONT}`;
+    g.textAlign='center';g.textBaseline='middle';
+    const warm=isTitle?'236,196,126':(alpha>0.55?'255,255,255':'214,198,168');
+    if(p.vertical){
+      const lh=fs*1.14, y0=-(txt.length-1)*lh/2;
+      for(let k2=0;k2<txt.length;k2++){
+        g.fillStyle=`rgba(${warm},${alpha*0.32})`; g.fillText(txt[k2],0,y0+k2*lh);
+        g.fillStyle=`rgba(${warm},${alpha})`;      g.fillText(txt[k2],0,y0+k2*lh);
+      }
+    }else{
+      g.fillStyle=`rgba(${warm},${alpha*0.32})`; g.fillText(lines[i],0,0);
+      g.fillStyle=`rgba(${warm},${alpha})`;      g.fillText(lines[i],0,0);
+    }
+    g.restore();
+  }
+  g.globalCompositeOperation='source-over';
+
+  if(p.vig){
+    const vg=g.createRadialGradient(w/2,h/2,Math.min(w,h)*0.30,w/2,h/2,Math.max(w,h)*0.74);
+    vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(0,0,0,.86)');
+    g.fillStyle=vg;g.fillRect(0,0,w,h);
+  }
+}
+
+function cycle(){return P.turn}
+
+/* ---------- 主循环 ---------- */
+function cycle(){return P.turn}
+// 环绕模型：ang = READ + i/n*2π + spin，转到读位(ang≡READ)的那一句最亮
+function activeIdx(){
+  const n=lines.length; if(!n)return -1;
+  const frac=((-(T/P.turn))%1+1)%1;
+  return Math.round(frac*n)%n;
+}
+let lastIdx=-2;
+function paintChrome(){
+  const i=activeIdx();
+  $('clock').textContent=`${T.toFixed(0)} / ${cycle().toFixed(0)}s`;
+  if(i===lastIdx)return;
+  lastIdx=i;
+  const now=$('now');
+  now.textContent=i<0?'':lines[i];
+  now.classList.toggle('title',i===0);
+  [...$('toc').children].forEach((li,k)=>li.setAttribute('aria-current',k===i?'true':'false'));
+}
+
+let last=performance.now();
+function tick(now){
+  const dt=Math.min(0.05,(now-last)/1000); last=now;
+  if(!paused){
+    T+=dt; if(T>cycle())T=0;
+    cam.phase=(cam.phase-P.flow*dt*0.35+P.rings*100)%P.rings;
+  }
+  cam.panX+=(cam.tgX-cam.panX)*Math.min(1,dt*4.2);
+  cam.panY+=(cam.tgY-cam.panY)*Math.min(1,dt*4.2);
+  render(ctx,W,H,DPR,P,T,cam);
+  paintChrome();
+  requestAnimationFrame(tick);
+}
+
+/* ---------- 交互 ---------- */
+let dragging=false,lx=0,ly=0;
+cv.addEventListener('pointerdown',e=>{dragging=true;lx=e.clientX;ly=e.clientY;
+  cv.classList.add('drag');cv.setPointerCapture(e.pointerId);$('hint').classList.add('gone')});
+cv.addEventListener('pointermove',e=>{
+  if(!dragging)return;
+  cam.tgX=Math.max(-W*0.4,Math.min(W*0.4,cam.tgX+e.clientX-lx));
+  cam.tgY=Math.max(-H*0.4,Math.min(H*0.4,cam.tgY+e.clientY-ly));
+  lx=e.clientX;ly=e.clientY;
+});
+addEventListener('pointerup',()=>{dragging=false;cv.classList.remove('drag')});
+
+function setPaused(v){
+  paused=v;
+  const b=$('play');
+  b.textContent=v?'播放':'暂停';
+  b.setAttribute('aria-pressed',v?'true':'false');
+}
+function jump(i){
+  const n=lines.length; i=((i%n)+n)%n;
+  T=P.turn*((n-i)%n)/n;            // 把这一句转到读位
+  lastIdx=-2;
+}
+$('play').onclick=()=>setPaused(!paused);
+$('prev').onclick=()=>jump((activeIdx()<0?0:activeIdx())-1);
+$('next').onclick=()=>jump((activeIdx()<0?-1:activeIdx())+1);
+$('toggle').onclick=e=>{
+  const d=$('drawer'),open=d.classList.toggle('open');
+  e.currentTarget.setAttribute('aria-pressed',open?'true':'false');
+};
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT')return;
+  if(e.code==='Space'){e.preventDefault();setPaused(!paused)}
+  if(e.code==='ArrowLeft')jump((activeIdx()<0?0:activeIdx())-1);
+  if(e.code==='ArrowRight')jump((activeIdx()<0?-1:activeIdx())+1);
+});
+
+/* ---------- 目录 ---------- */
+function buildTOC(){
+  const ol=$('toc'); ol.textContent='';
+  lines.forEach((s,i)=>{
+    const li=document.createElement('li');
+    li.textContent=s; li.tabIndex=0;
+    li.onclick=()=>jump(i);
+    li.onkeydown=ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();jump(i)}};
+    ol.appendChild(li);
+  });
+}
+
+resize(); rebuildAll(); buildTOC(); cellHint();
+if(reduce){ setPaused(true); $('hint').textContent='已按系统「减弱动效」暂停 · 点播放开始'; }
+setTimeout(()=>$('hint').classList.add('gone'),6000);
+requestAnimationFrame(tick);
+
+</script>
+
+</body>
+</html>
