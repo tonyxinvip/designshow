@@ -2,7 +2,7 @@
 
 Things Tony Xin made. The kind that run in a browser.
 
-**Site** https://tonyxinvip.github.io/designshow/
+**Site** https://tonyxinvip.github.io/designstudio/
 
 | Work | Published | Notes |
 |---|---|---|
@@ -12,7 +12,7 @@ Things Tony Xin made. The kind that run in a browser.
 
 ## Conventions
 
-- One directory per work. The URL is `/designshow/<directory>/`
+- One directory per work. The URL is `/designstudio/<directory>/`
 - Pages are self-contained: CSS, scripts and media inlined. They open offline and make no outside requests
 - The footer carries two things only: `Tony Xin` and the publication date
 - Run the gate before pushing. **If it fails, do not push:**

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# designshow 发布闸门 —— 推送前必须跑，不过就不要推。
+# designstudio 发布闸门 —— 推送前必须跑，不过就不要推。
 # 用法： bash scripts/check-publish.sh
 #
 # 这些全是「不报错、只是错了」的失效：漏了不会有任何提示，只是页面坏了或泄密了。
@@ -31,8 +31,8 @@ sec "自包含"
 for f in $PAGES; do
   n=${f#./}
   # data: 与页面内锚点不算外部请求
-  if grep -oE '(src|href)="https?://[^"]+"' "$f" | grep -qv '^href="https://github.com/tonyxinvip/designshow"'; then
-    grep -oE '(src|href)="https?://[^"]+"' "$f" | grep -v 'github.com/tonyxinvip/designshow' | head -3
+  if grep -oE '(src|href)="https?://[^"]+"' "$f" | grep -qv '^href="https://github.com/tonyxinvip/designstudio"'; then
+    grep -oE '(src|href)="https?://[^"]+"' "$f" | grep -v 'github.com/tonyxinvip/designstudio' | head -3
     no "$n 有外部请求（断网就坏；字体/CDN/图床一律内联）"
   else
     ok "$n 无外部请求"
