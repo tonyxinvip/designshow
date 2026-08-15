@@ -1,0 +1,671 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="A rosette of folded paper petals, counter-rotating tier by tier.">
+<title>Rosette</title>
+<style>
+  :root{--ink:#141013;--panel:#1B1519;--line:#332A2E;--text:#F2E9DE;--dim:#9A8C82;--hi:#E8A44C}
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;overflow:hidden;background:#0F0C0E}
+  body{font:14px/1.6 "Helvetica Neue",Helvetica,Arial,system-ui,sans-serif;color:var(--text);
+       display:flex;flex-direction:column}
+  #stage{position:relative;flex:1;min-height:0;background:#0F0C0E;overflow:hidden}
+  #cv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+  #cv.drag{cursor:grabbing}
+  #back{position:absolute;left:16px;top:14px;z-index:6;color:#F2E9DE;font-size:12.5px;
+        text-decoration:none;letter-spacing:.04em;text-shadow:0 1px 3px rgba(0,0,0,.9)}
+  #back:hover{color:var(--hi)}
+  #back:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--hi);outline-offset:2px}
+  #hint{position:absolute;left:16px;bottom:12px;z-index:5;color:#E8DED2;font-size:12px;
+        pointer-events:none;transition:opacity .5s cubic-bezier(.32,.72,0,1);text-shadow:0 1px 3px rgba(0,0,0,.9)}
+  #hint.gone{opacity:0}
+  #bar{flex:none;display:flex;align-items:center;gap:12px;padding:10px 16px;
+       background:var(--panel);border-top:1px solid var(--line)}
+  #title{flex:1;min-width:0;font-size:13px;letter-spacing:.22em;text-transform:uppercase;color:var(--dim);
+         overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #fps{flex:none;color:var(--dim);font-size:11.5px;font-variant-numeric:tabular-nums}
+  button{background:transparent;border:1px solid var(--line);color:var(--text);border-radius:4px;
+    padding:7px 12px;font:500 12.5px/1 inherit;cursor:pointer;white-space:nowrap;
+    transition:border-color .18s cubic-bezier(.32,.72,0,1),color .18s cubic-bezier(.32,.72,0,1)}
+  button:hover{border-color:var(--hi);color:var(--hi)}
+  button[aria-pressed="true"]{border-color:var(--hi);color:var(--hi)}
+  #panel{position:absolute;top:0;right:0;bottom:0;width:min(292px,86%);background:rgba(27,21,25,.96);
+    backdrop-filter:blur(10px);border-left:1px solid var(--line);padding:18px 18px 30px;
+    overflow-y:auto;transform:translateX(100%);transition:transform .28s cubic-bezier(.32,.72,0,1)}
+  #panel.open{transform:none}
+  #panel h2{font:400 11px/1 inherit;letter-spacing:.18em;text-transform:uppercase;color:var(--dim);margin:0 0 14px}
+  #panel h2+h2{margin-top:20px}
+  label{display:block;margin:0 0 11px}
+  .row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px}
+  .row b{font-weight:500;font-size:12.5px}
+  .row span{color:var(--hi);font-size:12px;font-variant-numeric:tabular-nums}
+  input[type=range]{width:100%;accent-color:var(--hi);height:18px;margin:0;background:transparent}
+  .checks{display:flex;flex-wrap:wrap;gap:9px 14px;margin-bottom:6px}
+  .checks label{display:flex;align-items:center;gap:6px;margin:0;font-size:12.5px}
+  input[type=checkbox]{accent-color:var(--hi);width:15px;height:15px;margin:0}
+  .note{color:var(--dim);font-size:12px;margin:16px 0 0;padding-top:13px;border-top:1px solid var(--line)}
+  .note b{color:var(--text);font-weight:500}
+  .note time{font-variant-numeric:tabular-nums}
+  @media (prefers-reduced-motion:reduce){#panel,#hint,button{transition:none}}
+  @media (max-width:620px){#bar{gap:8px;padding:9px 11px}button{padding:7px 9px;font-size:12px}
+    #title{letter-spacing:.12em;font-size:11.5px}}
+  @media (max-width:520px){#fps{display:none}#title{font-size:11px;letter-spacing:.08em}}
+  @media (max-width:400px){#title{display:none}}
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <canvas id="cv"></canvas>
+  <a id="back" href="../">← Tony’s Trials</a>
+  <p id="hint">Drag to turn it · scroll to zoom · sound starts the moment you touch the page</p>
+  <aside id="panel" aria-label="Controls">
+    <h2>Rosette</h2><div id="g-r"></div>
+    <h2>Paper</h2><div id="g-p"></div>
+    <h2>Colour</h2><div id="g-c"></div>
+    <h2>Sound</h2><div id="g-a"></div>
+    <h2>Toggles</h2><div class="checks" id="g-f"></div>
+    <p class="note">Folded paper, tier by tier. Each ring turns against the one inside it —
+      measured on the thing this came from, the middle runs one way at half a degree per frame
+      and everything outside it runs the other, with no zoom at all.<br><br>
+      The ornament is generated here, not scanned: every petal draws its own. Each time a petal
+      passes the top of its ring it strikes a note, so the tiers with different counts drift in
+      and out of phase with each other and the rhythm is the geometry.<br><br>
+      <b>Tony Xin</b><br><time datetime="2026-08-15">2026-08-15</time></p>
+  </aside>
+</div>
+
+<div id="bar">
+  <button id="play" aria-pressed="false">Pause</button>
+  <button id="reseed">New fold</button>
+  <button id="sound" aria-pressed="true">Sound off</button>
+  <div id="title">Rosette</div>
+  <div id="fps"></div>
+  <button id="toggle" aria-pressed="false" aria-controls="panel">Controls</button>
+</div>
+
+<script>
+/* ============================================================
+   Rosette —— 折纸花窗：一层层折起来的纸瓣，层与层反着拧
+
+   实测参考片（1920×1080 / 30fps，14.3 秒）三条：
+
+   1. **相邻层反向转。** 中心找准之后（画幅中心偏 −1.7% / −4.4%），
+      内圈 −0.50°/帧、外三圈 +0.50°/帧，约 2°/s。
+      第一次中心找错了（判据的半径跟着中心走，于是偏向角落），
+      量出来全是 0，差点得出「这东西不动」。**中心错了，所有极坐标测量一起错。**
+   2. **没有缩放。** 相邻帧径向位移中位 0px，全片累计 0px。
+   转速滑杆上 2.0°/s 就是实测值（标着 as measured）。默认给到 4.4°/s——
+   参考片是 3 分钟转一圈，那是从中截了 14 秒；网页上没人看三分钟，
+   而且转太慢的话各层错位的复合节奏根本听不出来。**忠于测量，但不被测量绑死。**
+
+   3. **各层的对称次数不一样。** 角向功率谱：花心 8 次（占该段能量 47%），
+      花瓣层 12 次（25–34%）。不是整幅一个 n。
+
+   用色也是量的：暖色占 55%（黄赭 40–60° 占 24%，橙红 0–40° 占 31%），
+   蓝 220–240° 占 12%，品红 300–360° 占 17%。平均饱和 0.43、明度 0.61。
+
+   **纹样是这里生成的，不是扫描的。** 参考片上那些人物插画是别人的作品，
+   一笔都没有取用；取用的是「折纸花窗」这个结构。
+   ============================================================ */
+
+const SPEC=[
+  ['tiers',  'g-r','Tiers',           2,  10, 1,   7,  v=>v],
+  ['nIn',    'g-r','Fold at centre',  3,  20, 1,   8,  v=>v+'-fold'],
+  ['nOut',   'g-r','Fold at rim',     3,  24, 1,  12,  v=>v+'-fold'],
+  ['rIn',    'g-r','Core radius',     4,  40, 1,  16,  v=>v+'%'],
+  ['reach',  'g-r','Tier reach',     40, 260, 1, 165,  v=>v+'%'],
+  ['lap',    'g-r','Overlap',         0,  80, 1,  58,  v=>v+'%'],
+  ['wide',   'g-r','Petal width',    40, 150, 1, 122,  v=>v+'%'],
+  ['tipf',   'g-r','Petal tip',       0, 100, 1,  52,  v=>v+'%'],
+  ['spin',   'g-r','Turn',            0,  90, 1,  44,  v=>v?(v*0.1).toFixed(1)+'°/s'+(v===20?' (as measured)':''):'still'],
+  ['stagger','g-r','Tier drift',      0, 100, 1,  34,  v=>v+'%'],
+  ['breathe','g-r','Breathe',         0, 100, 1,  22,  v=>v?v+'%':'off'],
+
+  ['crease', 'g-p','Fold shading',    0, 100, 1,  62,  v=>v+'%'],
+  ['facets', 'g-p','Creases / petal', 1,   5, 1,   3,  v=>v],
+  ['edge',   'g-p','Paper edge',      0, 100, 1,  58,  v=>v+'%'],
+  ['drop',   'g-p','Drop shadow',     0, 100, 1,  46,  v=>v+'%'],
+  ['orn',    'g-p','Ornament',        0, 100, 1,  70,  v=>v+'%'],
+  ['grain',  'g-p','Paper grain',     0, 100, 1,  30,  v=>v+'%'],
+
+  ['hue',    'g-c','Base hue',        0, 360, 1,  44,  v=>v+'°'],
+  ['coolH',  'g-c','Cool accent',     0, 360, 1, 224,  v=>v+'°'],
+  ['hotH',   'g-c','Hot accent',      0, 360, 1, 336,  v=>v+'°'],
+  ['sat',    'g-c','Saturation',      0, 100, 1,  46,  v=>v+'%'],
+  ['warmth', 'g-c','Warm share',     20, 100, 1,  62,  v=>v+'%'],
+  ['light',  'g-c','Paper lightness',30,  92, 1,  62,  v=>v+'%'],
+
+  ['vol',    'g-a','Volume',          0, 100, 1,  66,  v=>v+'%'],
+  ['root',   'g-a','Root',           40,  64, 1,  52,  v=>NOTE(v)],
+  ['strike', 'g-a','Strikes',         0, 100, 1,  70,  v=>v+'%'],
+  ['drone',  'g-a','Drone',           0, 100, 1,  46,  v=>v+'%'],
+  ['shadowN','g-a','Shadow note',     0, 100, 1,  34,  v=>v?v+'%':'never'],
+  ['decay',  'g-a','Decay',          20, 100, 1,  56,  v=>v+'%'],
+  ['tone',   'g-a','Tone',          400,6000,50,1900,  v=>v+' Hz'],
+  ['space',  'g-a','Space',           0, 100, 1,  64,  v=>v+'%'],
+];
+const FLAGS=[['medal','Centre medallion',true],['counter','Counter-rotate',true],
+             ['ornEdge','Scalloped edges',true]];
+const NAMES=['C','C♯','D','E♭','E','F','F♯','G','A♭','A','B♭','B'];
+const NOTE=m=>NAMES[m%12]+(Math.floor(m/12)-1);
+
+const P={}; SPEC.forEach(([k,,,,,,d])=>P[k]=d); FLAGS.forEach(([k,,d])=>P[k]=d);
+P.seed='rosette';
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function hashStr(s){let h=2166136261>>>0;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)>>>0}return h>>>0}
+function mulberry32(a){return function(){a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function hsl(h,s,l){
+  h=((h%360)+360)%360; s=Math.max(0,Math.min(1,s)); l=Math.max(0,Math.min(1,l));
+  if(s<=0.001){const v=Math.round(l*255);return `rgb(${v},${v},${v})`}
+  const c=(1-Math.abs(2*l-1))*s, x=c*(1-Math.abs((h/60)%2-1)), m=l-c/2;
+  let r,g,b;
+  if(h<60){r=c;g=x;b=0}else if(h<120){r=x;g=c;b=0}else if(h<180){r=0;g=c;b=x}
+  else if(h<240){r=0;g=x;b=c}else if(h<300){r=x;g=0;b=c}else{r=c;g=0;b=x}
+  return `rgb(${Math.round((r+m)*255)},${Math.round((g+m)*255)},${Math.round((b+m)*255)})`;
+}
+
+const $=id=>document.getElementById(id);
+for(const [k,g,label,min,max,step,def,fmt] of SPEC){
+  const l=document.createElement('label');
+  l.innerHTML=`<div class="row"><b>${label}</b><span></span></div>`;
+  const i=document.createElement('input');
+  i.type='range';i.min=min;i.max=max;i.step=step;i.value=def;i.setAttribute('aria-label',label);
+  l.appendChild(i);$(g).appendChild(l);
+  const o=l.querySelector('span');o.textContent=fmt(def);
+  i.addEventListener('input',()=>{P[k]=parseFloat(i.value);o.textContent=fmt(P[k]);
+    if(['tiers','nIn','nOut','facets'].includes(k))build();});
+}
+for(const [k,label,def] of FLAGS){
+  const l=document.createElement('label');const c=document.createElement('input');
+  c.type='checkbox';c.checked=def;l.appendChild(c);l.appendChild(document.createTextNode(label));
+  $('g-f').appendChild(l);c.addEventListener('change',()=>P[k]=c.checked);
+}
+
+/* ============================================================
+   结构：一层层的纸瓣。
+   每层自己的次数（内 8 外 12，中间插值——实测各层不同，不是整幅一个 n）、
+   自己的转向、自己的纹样种子。
+   ============================================================ */
+let tiers=[];
+function build(){
+  const r=mulberry32(hashStr(P.seed));
+  tiers=[];
+  for(let k=0;k<P.tiers;k++){
+    const f=P.tiers>1?k/(P.tiers-1):0;
+    // 次数从内到外插值，并取整到偶数附近——纸折出来的瓣数不会是任意值
+    const n=Math.max(3,Math.round(P.nIn+(P.nOut-P.nIn)*f));
+    tiers.push({
+      n, k,
+      dir:(k%2?-1:1),                       // 相邻层反向，实测就是这样
+      rate:1+ (r()-0.5)*0.5,
+      phase:r()*Math.PI*2,
+      seed:Math.floor(r()*1e9),
+      lum:0.86+r()*0.14,
+      hueMix:r(),                           // 这层偏暖还是偏冷
+      ornSeed:Math.floor(r()*1e9),
+      tipf:0.7+r()*0.6
+    });
+  }
+}
+
+/* ---------- 画布 ---------- */
+const cv=$('cv'),ctx=cv.getContext('2d');
+let W=0,H=0,DPR=1,qual=1;
+function resize(){
+  DPR=Math.min(2,devicePixelRatio||1);
+  W=cv.clientWidth;H=cv.clientHeight;
+  cv.width=Math.max(1,Math.round(W*DPR*qual));cv.height=Math.max(1,Math.round(H*DPR*qual));
+}
+addEventListener('resize',resize);
+
+const view={zoom:1,ax:0,ay:0,tgx:0,tgy:0,drag:0};
+let paused=false, T=0;
+
+/* ---------- 一片纸瓣 ---------- */
+/* 瓣形：从内缘两点出发，外缘收成一个尖（或平顶）。
+   折痕沿径向把瓣切成若干条，每条明度不同——这是「折过」而不是「画上去」的关键。 */
+function petalPath(g,r0,r1,half,tip){
+  const c0=Math.cos(-half),s0=Math.sin(-half),c1=Math.cos(half),s1=Math.sin(half);
+  const th=half*(1-tip);
+  const ct=Math.cos(-th),st=Math.sin(-th),ct1=Math.cos(th),st1=Math.sin(th);
+  g.beginPath();
+  g.moveTo(c0*r0,s0*r0);
+  g.lineTo(ct*r1,st*r1);
+  if(tip<0.98){ g.lineTo(ct1*r1,st1*r1); }
+  g.lineTo(c1*r0,s1*r0);
+  g.closePath();
+}
+
+function drawPetal(g,t,tier,r0,r1,half,base,accent,pal){
+  const F=Math.max(1,Math.round(P.facets));
+  const cr=P.crease/100;
+  const tip=P.tipf/100*tier.tipf;
+  // 落影：压在里面那层上，纸才有厚度
+  if(P.drop>0){
+    g.save(); g.translate(0,r0*0.012);
+    g.fillStyle=`rgba(28,14,8,${P.drop/100*0.34})`;
+    petalPath(g,r0,r1,half*1.02,tip); g.fill(); g.restore();
+  }
+  // 底色
+  g.fillStyle=hsl(base.h,base.s,Math.max(0.04,Math.min(0.97,base.l)));
+  petalPath(g,r0,r1,half,tip); g.fill();
+
+  g.save(); petalPath(g,r0,r1,half,tip); g.clip();
+  // 纹样先印上去
+  if(P.orn>0) ornament(g,t,tier,r0,r1,half,accent,pal);
+  // **折痕最后盖在纹样之上**。
+  // 第一版是先画折条、再把纹样盖上去，结果纸看起来是平的——
+  // 现实里是先印后折，光打在折面上，连印刷图案一起变亮变暗。
+  // 顺序错了这一件事，整幅就从「折纸」退回「贴纸」。
+  if(cr>0){
+    // **用 overlay 合成，不要用半透明白盖。**
+    // 平铺一层白 alpha 会同时抬亮度、洗饱和：实测饱和从 0.43 掉到 0.33、
+    // 明度从 0.61 涨到 0.74，两个数一起偏，病根就在这一层。
+    // overlay 压暗处、提亮处，色相饱和基本不动——这才是光打在折面上的行为。
+    g.globalCompositeOperation='overlay';
+    for(let i=0;i<F;i++){
+      const a0=-half+2*half*i/F, a1=-half+2*half*(i+1)/F;
+      const mid=(i+0.5)/F;
+      const lift=1-Math.abs(mid-0.42)*2;          // 折脊不在正中，偏一点更像手折的
+      const v=lift*0.5;
+      g.fillStyle = v>0 ? `rgba(255,244,222,${cr*v*0.95})`
+                        : `rgba(18,8,4,${cr*(-v)*0.95})`;
+      const t0=a0*(1-tip),t1=a1*(1-tip);
+      g.beginPath();
+      g.moveTo(Math.cos(a0)*r0,Math.sin(a0)*r0);
+      g.lineTo(Math.cos(t0)*r1,Math.sin(t0)*r1);
+      g.lineTo(Math.cos(t1)*r1,Math.sin(t1)*r1);
+      g.lineTo(Math.cos(a1)*r0,Math.sin(a1)*r0);
+      g.closePath(); g.fill();
+    }
+    g.globalCompositeOperation='source-over';
+    // 折脊上那道细高光
+    const aR=-half+2*half*0.42;
+    g.strokeStyle=`rgba(255,250,238,${cr*0.42})`;
+    g.lineWidth=Math.max(0.6,(r1-r0)*0.012);
+    g.beginPath();
+    g.moveTo(Math.cos(aR)*r0,Math.sin(aR)*r0);
+    g.lineTo(Math.cos(aR*(1-tip))*r1,Math.sin(aR*(1-tip))*r1);
+    g.stroke();
+  }
+  g.restore();
+
+  // 纸边
+  if(P.edge>0){
+    petalPath(g,r0,r1,half,tip);
+    g.strokeStyle=`rgba(255,248,236,${P.edge/100*0.75})`;
+    g.lineWidth=Math.max(0.7,(r1-r0)*0.020);
+    g.stroke();
+  }
+}
+
+/* 纹样：一道硬边带，就这一件。
+
+   **这一节是被自己的五轮返工逼出来的结论，值得写下来。**
+   前四版都在拿几何图元模仿参考片上的工笔人物插画：先是同心色带（彩虹千层糕），
+   再是云纹＋花头（还行但弱），再加墨色卷草和折扇骨（更碎），最后满屏碎花（成了包装纸）。
+   每一版都比上一版多几个图元，每一版都没更像。
+
+   问题不在参数，在前提：**参考片的分量来自摄影级的手绘人物，那是画出来的。**
+   程序生成追不上它，追的过程只会让画面越来越碎。
+
+   所以换前提：**不做插画，做纸。** 让折、叠、光承担画面，
+   每瓣是一块有确定颜色的纸，纹样退到一道带子。
+   色阶从近黑拉到奶白——**一张图的分量来自最暗和最亮那两档的距离**，
+   不是来自图元数量。 */
+function ornament(g,t,tier,r0,r1,half,accent,pal){
+  const rr=mulberry32(tier.ornSeed+Math.floor(half*1e4));
+  const L=r1-r0, amt=P.orn/100;
+  g.globalAlpha=amt;
+  // 一道横带，位置和宽度按瓣变。用对比色，不用花
+  const f0=0.10+rr()*0.52, bw=0.12+rr()*0.20;
+  const ra=r0+L*f0, rb=r0+L*Math.min(0.96,f0+bw);
+  g.fillStyle=pal.band;
+  g.beginPath(); g.arc(0,0,rb,-half,half); g.arc(0,0,ra,half,-half,true); g.closePath(); g.fill();
+  // 带子一侧的扇贝边，唯一保留的"花边"
+  if(P.ornEdge&&rr()<0.72){
+    g.fillStyle=pal.trim;
+    scallop(g,rb,half,L*0.045,Math.max(2,2+Math.floor(rr()*4)),false);
+    g.fill();
+  }
+  // 一道墨线，压边
+  g.strokeStyle=pal.ink; g.lineWidth=Math.max(0.8,L*0.013);
+  g.beginPath(); g.arc(0,0,ra,-half,half); g.stroke();
+  g.globalAlpha=1;
+}
+function scallop(g,r,half,amp,n,inward){
+  // 沿弧的扇贝边：一条连续的波，不是一排点。一排点读起来是波点布，波才读得出边花。
+  g.beginPath();
+  const N=Math.max(24,n*8);
+  for(let i=0;i<=N;i++){
+    const f=i/N,a=-half+2*half*f;
+    const rq=r+(inward?-1:1)*amp*Math.abs(Math.sin(f*n*Math.PI));
+    const x=Math.cos(a)*rq,y=Math.sin(a)*rq; i?g.lineTo(x,y):g.moveTo(x,y);
+  }
+  for(let i=N;i>=0;i--){
+    const a=-half+2*half*(i/N), rq=r+(inward?1:-1)*amp*1.1;
+    g.lineTo(Math.cos(a)*rq,Math.sin(a)*rq);
+  }
+  g.closePath();
+}
+
+/* 色板：从实测的色相分布来——暖 55%、蓝 12%、品红 17%，
+   但**每一档都给足明度跨度**：从近黑到奶白。
+   每瓣抽一块纸，不是每瓣画一幅画。 */
+function palette(){
+  const S=P.sat/100, hue=P.hue, cool=P.coolH, hot=P.hotH, LT=P.light/100;
+  const warm=P.warmth/100;
+  return {
+    papers:[
+      {h:hue,     s:S*0.80, l:LT*1.00, w:warm*0.34},          // 亮赭，主
+      {h:hue+16,  s:S*0.92, l:LT*0.80, w:warm*0.24},          // 深赭
+      {h:hue-10,  s:S*0.35, l:Math.min(0.95,LT*1.28), w:warm*0.16}, // 奶白
+      {h:cool,    s:S*0.95, l:0.20,    w:(1-warm)*0.46},      // 近黑深蓝 ← 最暗档
+      {h:cool+10, s:S*0.80, l:0.44,    w:(1-warm)*0.24},      // 中蓝
+      {h:hot,     s:S*1.00, l:0.42,    w:(1-warm)*0.30},      // 品红
+    ],
+    ink:hsl(cool-8,S*0.75,0.10),
+    band:hsl(hot,S,0.40),
+    trim:hsl(hue-6,S*0.25,0.94),
+  };
+}
+function pickPaper(pal,r){
+  const tot=pal.papers.reduce((a,p)=>a+p.w,0);
+  let x=r*tot;
+  for(const p of pal.papers){ x-=p.w; if(x<=0) return p; }
+  return pal.papers[0];
+}
+
+/* 中心花牌：8 次的同心扇贝盘，也是生成的 */
+function medallion(g,R,t){
+  const rr=mulberry32(hashStr(P.seed+'|medal'));
+  const n=Math.max(3,Math.round(P.nIn));
+  const rings=4+Math.floor(rr()*3);
+  for(let i=rings;i>=1;i--){
+    const rad=R*i/rings;
+    const hue=[P.hue,P.coolH,P.hotH][i%3];
+    g.fillStyle=hsl(hue,P.sat/100*(0.5+0.4*rr()),0.30+0.5*(i/rings));
+    const m=n*(1+(i%2));
+    g.beginPath();
+    for(let s=0;s<m;s++){
+      const a=s/m*Math.PI*2+t*0.03;
+      const rq=rad*(1+0.10*Math.cos(a*m));
+      const x=Math.cos(a)*rq, y=Math.sin(a)*rq;
+      s?g.lineTo(x,y):g.moveTo(x,y);
+      g.arc(x,y,rad*0.10,0,6.2832);
+    }
+    g.closePath(); g.fill();
+    g.fillStyle=hsl(hue,P.sat/100*0.35,0.20+0.55*(i/rings));
+    g.beginPath(); g.arc(0,0,rad*0.86,0,6.2832); g.fill();
+  }
+  g.fillStyle=hsl(P.hotH,P.sat/100*0.7,0.62);
+  g.beginPath(); g.arc(0,0,R*0.16,0,6.2832); g.fill();
+}
+
+/* ---------- 渲染 ---------- */
+function tierAngle(tier,t){
+  const dir=P.counter?tier.dir:1;
+  const drift=1+P.stagger/100*(tier.k*0.35);
+  return tier.phase + (reduce?0:t)*P.spin*0.1*Math.PI/180*dir*drift*tier.rate;
+}
+function tierRadii(tier,R){
+  const core=P.rIn/100*R;
+  const step=P.reach/100*R/Math.max(1,P.tiers);
+  const lap=P.lap/100;
+  const r0=core+step*tier.k*(1-lap*0.55);
+  return [r0, r0+step*(1+lap)];
+}
+function render(t){
+  ctx.setTransform(1,0,0,1,0,0);
+  const bg=hsl(P.hue-8,P.sat/100*0.30,0.07);
+  ctx.fillStyle=bg; ctx.fillRect(0,0,cv.width,cv.height);
+  const R=Math.min(cv.width,cv.height)*0.5*view.zoom;
+  const cx=cv.width*0.5+view.ax*R, cy=cv.height*0.5+view.ay*R;
+  ctx.save(); ctx.translate(cx,cy);
+
+  // 由外向内画：外层在下，里层压在上面——纸是一层层叠上去的
+  for(let k=tiers.length-1;k>=0;k--){
+    const tier=tiers[k];
+    let [r0,r1]=tierRadii(tier,R);
+    // 呼吸：瓣一起开合。实测参考片没有缩放，这一项是我加的，默认给得很轻
+    if(P.breathe>0&&!reduce){
+      const br=1+Math.sin(t*0.21+tier.k*0.7)*P.breathe/100*0.13;
+      r1=r0+(r1-r0)*br;
+    }
+    const a0=tierAngle(tier,t);
+    const half=Math.PI/tier.n*P.wide/100;
+    const f=tiers.length>1?tier.k/(tiers.length-1):0;
+    const pal=palette();
+    const accent={h:P.coolH,h2:P.hotH,s:P.sat/100*0.8};
+    // 每瓣抽一块纸。抽签用整数哈希，所以同一层同一位永远是同一块——
+    // 转起来纸不会自己换颜色。
+    const rp=mulberry32(tier.seed);
+    for(let j=0;j<tier.n;j++){
+      const pk=pickPaper(pal,rp());
+      const base={h:pk.h,s:pk.s,l:Math.max(0.05,Math.min(0.96,pk.l*(1-f*0.06)*tier.lum))};
+      ctx.save();
+      ctx.rotate(a0+j/tier.n*Math.PI*2);
+      drawPetal(ctx,t,tier,r0,r1,half,base,accent,pal);
+      ctx.restore();
+    }
+  }
+  if(P.medal) medallion(ctx,P.rIn/100*R*0.95,t);
+
+  // 纸纹：一层极轻的噪点，把矢量的干净感压掉一点
+  ctx.restore();
+  if(P.grain>0) grain();
+}
+let grainCv=null;
+function grain(){
+  if(!grainCv||grainCv.width!==cv.width||grainCv.height!==cv.height){
+    grainCv=document.createElement('canvas');
+    grainCv.width=cv.width; grainCv.height=cv.height;
+    const g=grainCv.getContext('2d');
+    const im=g.createImageData(cv.width,cv.height), d=im.data;
+    for(let i=0;i<d.length;i+=4){
+      const v=200+Math.random()*55;
+      d[i]=d[i+1]=d[i+2]=v; d[i+3]=Math.random()*40;
+    }
+    g.putImageData(im,0,0);
+  }
+  ctx.save();
+  ctx.globalCompositeOperation='overlay';
+  ctx.globalAlpha=P.grain/100*0.5;
+  ctx.drawImage(grainCv,0,0);
+  ctx.restore();
+}
+
+/* ============================================================
+   声音：每有一瓣转过自己那层的正上方，敲一下。
+
+   这和 Oculus 的「跳变触发」是同一套架构（事件驱动），但节奏完全不同：
+   那边的事件是离散乱跳的，这里的转动是匀速的，所以每层自己是**规律的脉冲**，
+   周期＝一层转过一瓣所需的时间。各层的瓣数不同、转速不同、还反向——
+   于是几条规律脉冲互相错位，出来的是复合节奏。
+   **节奏不是我编的，是几何算出来的。**
+
+   音阶：五声小调 [0,3,5,7,10]，暖的。
+   神秘感来自偶尔闯进来的那个半音（Shadow note）——五声本身不神秘，
+   是那个不属于它的音让人耳朵一紧。
+   ============================================================ */
+const A={ctx:null,on:false,armed:true,last:[],lastHit:0};
+const PENT=[0,3,5,7,10], SHADOW=[1,6,8];
+const mtof=m=>440*Math.pow(2,(m-69)/12);
+
+function audioInit(){
+  const C=window.AudioContext||window.webkitAudioContext; if(!C)return false;
+  const ctx=new C(); A.ctx=ctx;
+  A.master=ctx.createGain(); A.master.gain.value=0; A.master.connect(ctx.destination);
+
+  const dur=3.2, sr=ctx.sampleRate;
+  const ir=ctx.createBuffer(2,Math.floor(sr*dur),sr);
+  for(let ch=0;ch<2;ch++){
+    const d=ir.getChannelData(ch);
+    for(let i=0;i<d.length;i++){
+      const x=i/d.length;
+      d[i]=(Math.random()*2-1)*Math.pow(1-x,2.4)*(1-Math.exp(-i/(sr*0.015)));
+    }
+  }
+  A.rev=ctx.createConvolver(); A.rev.buffer=ir;
+  A.wet=ctx.createGain(); A.wet.gain.value=0.6;
+  A.wet.connect(A.rev); A.rev.connect(A.master);
+
+  A.lp=ctx.createBiquadFilter(); A.lp.type='lowpass';
+  A.lp.frequency.value=P.tone; A.lp.Q.value=0.5;
+  A.lp.connect(A.master); A.lp.connect(A.wet);
+
+  // 持续音：两个失谐锯齿 + 一个五度，很轻
+  A.droneG=ctx.createGain(); A.droneG.gain.value=0; A.droneG.connect(A.lp);
+  A.drone=[0,0.09,7.02].map((c,i)=>{
+    const o=ctx.createOscillator(); o.type=i===2?'triangle':'sawtooth';
+    o.detune.value=c*100*(i===2?0:1);
+    const gg=ctx.createGain(); gg.gain.value=i===2?0.22:0.13;
+    o.connect(gg); gg.connect(A.droneG); o.start(); return o;
+  });
+  const lfo=ctx.createOscillator(); lfo.frequency.value=0.041;
+  const lg=ctx.createGain(); lg.gain.value=420;
+  lfo.connect(lg); lg.connect(A.lp.frequency); lfo.start();
+  return true;
+}
+
+/* 敲击音：金属/木质之间。三个非整数倍的分音，快起振、指数衰减。
+   非整数倍是「敲」的关键——整数倍听起来是吹的。 */
+function strike(freq,gain,dec){
+  const ctx=A.ctx; if(!ctx)return;
+  const t=ctx.currentTime;
+  [[1,1],[2.76,0.42],[5.40,0.18]].forEach(([m,a],i)=>{
+    const o=ctx.createOscillator(); o.type=i?'sine':'triangle';
+    o.frequency.value=freq*m;
+    const g=ctx.createGain();
+    const d=dec/(1+i*0.9);
+    g.gain.setValueAtTime(0,t);
+    g.gain.linearRampToValueAtTime(gain*a,t+0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    o.connect(g); g.connect(A.lp); if(i===0) g.connect(A.wet);
+    o.start(t); o.stop(t+d+0.05);
+  });
+}
+
+/* 一层转过一瓣 → 敲一下。层号决定音区：外层低、内层高。 */
+function petalHit(k,idx){
+  if(!A.on||!A.ctx||P.strike<=0)return;
+  const now=A.ctx.currentTime;
+  if(now-A.lastHit<0.045)return;                 // 同一瞬间多层齐发时限流
+  A.lastHit=now;
+  const oct=12*(3-Math.min(2,k));
+  let deg;
+  if(Math.random()<P.shadowN/100*0.30){
+    deg=SHADOW[(idx+k)%SHADOW.length];           // 闯进来的半音
+  }else{
+    deg=PENT[(idx*2+k*3)%PENT.length];
+  }
+  strike(mtof(P.root+deg+oct),
+         0.13*P.strike/100*(1-k*0.07),
+         (0.5+P.decay/100*2.6)/(1+k*0.14));
+}
+
+function audioSync(){
+  if(!A.on||!A.ctx)return;
+  const t=A.ctx.currentTime, K=(x,v,c)=>x.setTargetAtTime(v,t,c);
+  K(A.master.gain,P.vol/100*0.55,0.12);
+  K(A.droneG.gain,P.drone/100*0.10,0.3);
+  K(A.lp.frequency,P.tone,0.2);
+  K(A.wet.gain,P.space/100*0.9,0.25);
+  const f=mtof(P.root-12);
+  A.drone.forEach((o,i)=>o.frequency.setTargetAtTime(i===2?f*1.5:f,t,0.4));
+}
+
+async function soundToggle(force){
+  const b=$('sound');
+  const want=force===undefined?!A.on:force;
+  if(want){
+    if(!A.ctx&&!audioInit()){b.textContent='No audio';b.disabled=true;A.armed=false;return}
+    await A.ctx.resume();
+    A.on=true; A.armed=true; b.textContent='Sound off'; b.setAttribute('aria-pressed','true');
+  }else{
+    A.on=false; A.armed=false;
+    if(A.ctx) A.master.gain.setTargetAtTime(0,A.ctx.currentTime,0.12);
+    b.textContent='Sound on'; b.setAttribute('aria-pressed','false');
+  }
+}
+// 不能直接把 soundToggle 当监听器：浏览器会把 Event 当第一个参数传进去，
+// force 收到真值，按钮就只会开不会关。
+$('sound').addEventListener('click',()=>soundToggle());
+
+/* 默认开着，但浏览器不许未经手势出声——所以「默认开」＝默认武装：
+   任何一下交互都让它立刻响，不必去找按钮。 */
+function firstGesture(){
+  if(A.armed&&!A.on) soundToggle(true);
+  ['pointerdown','keydown','wheel','touchstart'].forEach(ev=>removeEventListener(ev,firstGesture));
+}
+['pointerdown','keydown','wheel','touchstart'].forEach(ev=>
+  addEventListener(ev,firstGesture,{passive:true}));
+
+/* ---------- 主循环 ---------- */
+let last=performance.now(),acc=0,frames=0;
+function tick(now){
+  const dt=Math.min(0.05,(now-last)/1000); last=now;
+  if(!paused){
+    T+=dt;
+    audioSync();
+    view.ax+=(view.tgx-view.ax)*Math.min(1,dt*4);
+    view.ay+=(view.tgy-view.ay)*Math.min(1,dt*4);
+    // 事件：每层转过一瓣就敲一下。用「转过了多少个瓣位」的整数部分判定，
+    // 和画面用的是同一个角度，所以听到的和看到的必然同一件事。
+    for(let k=0;k<tiers.length;k++){
+      const a=tierAngle(tiers[k],T);
+      const s=Math.floor(a/(Math.PI*2/tiers[k].n));
+      if(A.last[k]===undefined){A.last[k]=s;continue}
+      if(s!==A.last[k]){ A.last[k]=s; if(!reduce) petalHit(k,((s%64)+64)%64); }
+    }
+    render(T);
+  }
+  frames++; acc+=dt;
+  if(acc>0.5){
+    const f=Math.round(frames/acc);
+    $('fps').textContent=f+' fps · '+tiers.reduce((a,t)=>a+t.n,0)+' petals';
+    if(!paused){
+      if(f<26&&qual>0.56){qual=Math.max(0.55,qual-0.15);resize()}
+      else if(f>52&&qual<1){qual=Math.min(1,qual+0.10);resize()}
+    }
+    frames=0;acc=0;
+  }
+  requestAnimationFrame(tick);
+}
+
+/* ---------- 交互 ---------- */
+let drag=false,px=0,py=0;
+cv.addEventListener('pointerdown',e=>{drag=true;px=e.clientX;py=e.clientY;
+  cv.setPointerCapture(e.pointerId);cv.classList.add('drag');$('hint').classList.add('gone')});
+cv.addEventListener('pointermove',e=>{
+  if(!drag)return;
+  view.tgx=Math.max(-.7,Math.min(.7,view.tgx+(e.clientX-px)/cv.clientWidth*1.3));
+  view.tgy=Math.max(-.7,Math.min(.7,view.tgy+(e.clientY-py)/cv.clientHeight*1.3));
+  px=e.clientX;py=e.clientY;
+});
+addEventListener('pointerup',()=>{drag=false;cv.classList.remove('drag')});
+cv.addEventListener('wheel',e=>{e.preventDefault();
+  view.zoom=Math.max(0.35,Math.min(3.4,view.zoom*(e.deltaY>0?0.94:1.064)));
+  $('hint').classList.add('gone');},{passive:false});
+
+$('play').addEventListener('click',()=>{paused=!paused;
+  $('play').textContent=paused?'Play':'Pause';$('play').setAttribute('aria-pressed',paused);last=performance.now()});
+$('reseed').addEventListener('click',()=>{P.seed='rosette-'+Math.floor(Math.random()*1e9);build();A.last.length=0});
+$('toggle').addEventListener('click',()=>{const o=$('panel').classList.toggle('open');
+  $('toggle').setAttribute('aria-pressed',o)});
+addEventListener('keydown',e=>{
+  if(e.key===' '){e.preventDefault();$('play').click()}
+  if(e.key==='Escape'&&$('panel').classList.contains('open'))$('toggle').click();
+});
+
+resize(); build();
+if(reduce) $('hint').textContent='Reduced motion is on: the rosette is held still. Every control still works.';
+requestAnimationFrame(tick);
+
+</script>
+</body>
+</html>

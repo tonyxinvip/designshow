@@ -9,6 +9,7 @@ Things Tony Xin made. The kind that run in a browser.
 | [Armature](armature/) | 2026-08-15 | A lattice of rods and ball joints at real depths. Fly through it |
 | [Life Is an Ocean](letter/) | 2026-08-15 | A friend's handwritten letter, in Chinese, turned into a tunnel of its own characters. Text used with permission |
 | [Oculus](oculus/) | 2026-08-15 | A dome of coloured slats, built in 3D and twelve-fold. Nothing spins: it holds still and jumps. A bell on every jump |
+| [Rosette](rosette/) | 2026-08-15 | Folded paper petals, tier against tier. Each ring turns the other way and strikes on its own count |
 | [Kaleidoscope](kaleidoscope/) | 2026-08-15 | Mirror symmetry, recursive nesting, particle spray. Every parameter is on the panel. Exports 3840 × 3840 PNG |
 
 ## Conventions
