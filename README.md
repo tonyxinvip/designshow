@@ -6,6 +6,7 @@ Things Tony Xin made. The kind that run in a browser.
 
 | Work | Published | Notes |
 |---|---|---|
+| [Armature](armature/) | 2026-08-15 | A lattice of rods and ball joints at real depths. Fly through it |
 | [Life Is an Ocean](letter/) | 2026-08-15 | A friend's handwritten letter, in Chinese, turned into a tunnel of its own characters. Text used with permission |
 | [Kaleidoscope](kaleidoscope/) | 2026-08-15 | Mirror symmetry, recursive nesting, particle spray. Every parameter is on the panel. Exports 3840 × 3840 PNG |
 
