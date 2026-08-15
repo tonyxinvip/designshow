@@ -69,6 +69,9 @@
     <p class="note">Nothing here spins. Measured on the source, the rotation between frames is a
       median of zero degrees and the zoom is zero pixels. What reads as movement is a stack of
       rings that hold dead still and then jump.<br><br>
+      The ball in the middle is a real one. Perspective, not a flat grid: the struts facing you
+      are half again as long and twice as thick as the ones behind, and the light sits in camera
+      space so the terminator sweeps across the face you can see.<br><br>
       The sound is built in the page, not a recording. It has no beat, because the picture has
       none: each jump rings a bell, each inversion breathes.<br><br>
       <b>Tony Xin</b><br><time datetime="2026-08-15">2026-08-15</time></p>
@@ -110,10 +113,14 @@ const SPEC=[
   ['slats',  'g-d','Slats / ring',  18, 140, 1,  64,  v=>v],
   ['fill',   'g-d','Slat width',    10,  92, 1,  52,  v=>v+'%'],
   ['spread', 'g-d','Ring spacing',  10,  70, 1,  34,  v=>v+'%'],
-  ['rIn',    'g-d','Inner radius',  10,  70, 1,  30,  v=>v+'%'],
-  ['sphere', 'g-d','Sphere size',    0,  60, 1,  25,  v=>v+'%'],
-  ['facets', 'g-d','Sphere detail',  1,   3, 1,   2,  v=>['coarse','medium','fine'][v-1]],
+  ['rIn',    'g-d','Inner radius',  10,  70, 1,  38,  v=>v+'%'],
+  ['sphere', 'g-d','Sphere size',    0,  60, 1,  30,  v=>v+'%'],
+  ['facets', 'g-d','Sphere detail',  1,   3, 1,   3,  v=>['coarse','medium','fine'][v-1]],
   ['tilt',   'g-d','Sphere tilt',  -60,  60, 1,  26,  v=>v+'°'],
+  ['spin',   'g-d','Sphere spin',    0,  60, 1,  11,  v=>v?(v*0.01).toFixed(2)+' rad/s':'still'],
+  ['lightA', 'g-d','Light angle',    0, 360, 1, 214,  v=>v+'°'],
+  ['ringIn', 'g-d','Ring radius',  102, 190, 1, 112,  v=>(v/100).toFixed(2)+'R'],
+  ['ringW',  'g-d','Ring width',     3,  50, 1,  11,  v=>(v/100).toFixed(2)+'R'],
   ['offY',   'g-d','Centre offset',-40,  40, 1, -20,  v=>v+'%'],
 
   ['jump',   'g-g','Jump rate',       0, 100, 1,  38,  v=>v?(v*0.028).toFixed(2)+'/s':'held'],
@@ -135,7 +142,7 @@ const SPEC=[
   ['space',  'g-a','Space',           0, 100, 1,  72,  v=>v+'%'],
   ['drift',  'g-a','Drift',           1, 100, 1,  30,  v=>v+'%'],
 ];
-const FLAGS=[['hoops','Ring edges',true],['ring','Sphere ring',true],['lamp','Light',true],
+const FLAGS=[['hoops','Ring edges',true],['ring','Sphere ring',true],['lamp','Light',true],['nodes','Joints',true],
              ['padGlow','Pad breathes the light',true]];
 const NAMES=['C','C♯','D','E♭','E','F','F♯','G','A♭','A','B♭','B'];
 const NOTE=m=>NAMES[m%12]+(Math.floor(m/12)-1);
@@ -207,7 +214,9 @@ function build(){
   buildSphere();
 }
 
-/* 测地球：正二十面体细分后取棱。用真三维顶点，投影时才有前后。 */
+/* 测地球：正二十面体细分后取棱。存的是**索引对**不是坐标对——
+   顶点每帧只投影一次，480 条棱共用 162 个顶点，投影量少三分之二。 */
+let sphereV=[], sphereE=[], sphereP=[];
 function buildSphere(){
   const t=(1+Math.sqrt(5))/2;
   let V=[[-1,t,0],[1,t,0],[-1,-t,0],[1,-t,0],[0,-1,t],[0,1,t],[0,-1,-t],[0,1,-t],
@@ -229,12 +238,13 @@ function buildSphere(){
     }
     F=NF;
   }
-  const seen=new Set(); sphereEdges=[];
+  const seen=new Set(); sphereE=[];
   for(const f of F) for(let i=0;i<3;i++){
     const a=f[i],b=f[(i+1)%3], k=a<b?a+'_'+b:b+'_'+a;
     if(seen.has(k))continue; seen.add(k);
-    sphereEdges.push([V[a],V[b]]);
+    sphereE.push([a,b]);
   }
+  sphereV=V; sphereP=V.map(()=>[0,0,0,0]);
 }
 
 /* ============================================================
@@ -375,51 +385,127 @@ function drawDeck(g,d,a,R,idx,t){
   }
 }
 
+/* ============================================================
+   球：这是一颗有体积的星球，不是贴在中间的一层网格。
+
+   让球「立起来」的是三件事，缺一件就塌回平面：
+
+   1. **透视投影**，不是正交。相机在 D=3.0 个球半径外，近极点放大系数 1.5、
+      远极点 0.75——同一根杆在正面比在背面粗一倍，眼睛立刻读出前后。
+      正交投影下前后一样大，无论怎么调明暗都像贴纸。
+   2. **明暗界线**。每个顶点的法线就是它自己的坐标（单位球），点乘光向得到受光。
+      背光那半沉进暗部，亮暗交界扫过球面——这一条是「星球」而不是「网格球」的来源。
+   3. **深度排序 + 灯在中间**。先画背半球，再画中心那盏灯，最后画前半球。
+      灯被前面的杆挡住，才看得出杆在灯前面、球是空心的。
+   ============================================================ */
+const CAMD=3.0;                                  // 相机距离，单位＝球半径
 function drawSphere(g,t,R){
   const rr=P.sphere/100*R;
   const tilt=P.tilt*Math.PI/180, ct=Math.cos(tilt), st=Math.sin(tilt);
-  const spin=reduce?0:t*0.055;                    // 参考片没有旋转，这里只给极慢的一点
+  const spin=reduce?0:t*P.spin*0.01;
   const cs=Math.cos(spin), ss=Math.sin(spin);
-  const proj=v=>{
-    let [x,y,z]=v;
-    let X=x*cs+z*ss, Z=-x*ss+z*cs;                // 绕 y
-    let Y=y*ct-Z*st;  Z=y*st+Z*ct;                // 绕 x
-    return [X*rr,Y*rr,Z];
+  // 光定义在**相机空间**，而且 z 恒为正。
+  // 第一版把光角当成绕 y 轴转，转过 90° 之后光跑到球背后，整个前半球没有受光面，
+  // 只剩环境光的一层灰——那不是明暗界线，那是没打灯。
+  // z 恒正之后，角度扫的是明暗界线在正面的方向，弯月牙绕着球转，星球感就是这么来的。
+  const la=P.lightA*Math.PI/180;
+  const L=[Math.cos(la)*0.80,Math.sin(la)*0.80,0.58];
+  const Ln=Math.hypot(...L); L[0]/=Ln;L[1]/=Ln;L[2]/=Ln;
+
+  // 顶点一次性投影：屏幕 x、y、深度 z、透视系数 k
+  const rot=(x,y,z)=>{
+    const X=x*cs+z*ss; let Z=-x*ss+z*cs;
+    const Y=y*ct-Z*st; Z=y*st+Z*ct;
+    return [X,Y,Z];
   };
-  // 环：先画后半，再画球，最后画前半——遮挡关系全靠这个顺序
-  const ringPts=[];
-  if(P.ring){
-    for(let k=0;k<=180;k++){
-      const a=k/180*Math.PI*2;
-      ringPts.push(proj([Math.cos(a)*1.28,0,Math.sin(a)*1.28]));
-    }
-    strokeRing(g,ringPts,false,rr);
+  for(let i=0;i<sphereV.length;i++){
+    const v=sphereV[i], r=rot(v[0],v[1],v[2]);
+    const k=CAMD/(CAMD-r[2]);
+    sphereP[i][0]=r[0]*rr*k; sphereP[i][1]=r[1]*rr*k;
+    sphereP[i][2]=r[2];      sphereP[i][3]=k;
   }
-  for(const [A,B] of sphereEdges){
-    const a=proj(A), b=proj(B);
-    const zm=(a[2]+b[2])/2;
-    const front=zm>0;
-    g.strokeStyle=front?`rgba(255,255,255,${0.30+0.55*zm})`:`rgba(255,255,255,${0.10+0.10*(1+zm)})`;
-    g.lineWidth=Math.max(0.6,rr*(front?0.016:0.010));
-    g.beginPath(); g.moveTo(a[0],a[1]); g.lineTo(b[0],b[1]); g.stroke();
-  }
-  if(P.ring) strokeRing(g,ringPts,true,rr);
+  // 受光：法线＝顶点坐标（单位球），转过之后点乘光向
+  const lit=i=>{
+    const v=sphereV[i], r=rot(v[0],v[1],v[2]);
+    return Math.max(0,r[0]*L[0]+r[1]*L[1]+r[2]*L[2]);
+  };
+  const lum=sphereV.map((_,i)=>lit(i));
+
+  const ringPts=P.ring?ringBand(rot,rr):null;
+  if(ringPts) drawBand(g,ringPts,false);
+
+  // 背半球：暗、细
+  drawStruts(g,rr,lum,false);
+  // 灯在球心，被前半球的杆遮住——这就是「空心」的证据
   if(P.lamp){
     const lr=rr*0.38*(1+glowNow*0.20);
-    const lx=-rr*0.10, ly=rr*0.04;
-    g.fillStyle='#fff'; g.beginPath(); g.arc(lx,ly,lr,0,6.2832); g.fill();
+    g.fillStyle='#fff';
+    g.beginPath(); g.arc(-rr*0.10,rr*0.04,lr,0,6.2832); g.fill();
+  }
+  drawStruts(g,rr,lum,true);
+  if(ringPts) drawBand(g,ringPts,true);
+}
+
+function drawStruts(g,rr,lum,front){
+  const E=sphereE, Pt=sphereP;
+  for(let e=0;e<E.length;e++){
+    const a=Pt[E[e][0]], b=Pt[E[e][1]];
+    const zm=(a[2]+b[2])*0.5;
+    if((zm>0)!==front) continue;
+    const k=(a[3]+b[3])*0.5;
+    const sh=(lum[E[e][0]]+lum[E[e][1]])*0.5;     // 明暗界线
+    // 前面的杆更粗更亮：粗细直接跟透视系数走，这是最省事也最有效的一条
+    // 环境光给足。第一版是 0.16+0.80*sh，背光那半直接沉成黑色，
+    // 整个前半球在黑底上等于不存在——只有压在灯的白盘上时才看得见，球变成了环。
+    // 明暗界线要能看出来，但暗部不能沉到底。
+    const v=front? 0.22+0.76*sh : 0.07+0.17*sh;
+    const c=Math.min(255,(v*255)|0);
+    g.strokeStyle=`rgb(${c},${c},${c})`;
+    g.lineWidth=Math.max(0.5,rr*0.014*k);
+    g.beginPath(); g.moveTo(a[0],a[1]); g.lineTo(b[0],b[1]); g.stroke();
+  }
+  if(!P.nodes) return;
+  for(let i=0;i<Pt.length;i++){
+    const p=Pt[i];
+    if((p[2]>0)!==front) continue;
+    const v=front? 0.26+0.72*lum[i] : 0.09+0.14*lum[i];
+    const c=Math.min(255,(v*255)|0);
+    g.fillStyle=`rgb(${c},${c},${c})`;
+    g.beginPath(); g.arc(p[0],p[1],Math.max(0.5,rr*0.020*p[3]),0,6.2832); g.fill();
   }
 }
-function strokeRing(g,pts,front,rr){
-  g.strokeStyle=front?'rgba(255,255,255,.92)':'rgba(255,255,255,.34)';
-  g.lineWidth=Math.max(1.4,rr*0.075);
-  g.lineCap='butt';
-  g.beginPath(); let open=false;
-  for(const p of pts){
-    if((p[2]>0)===front){ if(!open){g.moveTo(p[0],p[1]);open=true} else g.lineTo(p[0],p[1]); }
-    else open=false;
+
+/* 环是有宽度的带子，不是一根线。线画不出「它也有厚度、也会被球挡住」。 */
+function ringBand(rot,rr){
+  const N=150, out=[];
+  for(let i=0;i<=N;i++){
+    const a=i/N*Math.PI*2, ca=Math.cos(a), sa=Math.sin(a);
+    const seg=[];
+    for(const rad of [P.ringIn/100,P.ringIn/100+P.ringW/100]){
+      const r=rot(ca*rad,0,sa*rad);
+      const k=CAMD/(CAMD-r[2]);
+      seg.push([r[0]*rr*k,r[1]*rr*k]);
+    }
+    const rz=rot(ca,0,sa)[2];
+    out.push([seg[0],seg[1],rz]);
   }
-  g.stroke();
+  return out;
+}
+function drawBand(g,pts,front){
+  g.beginPath(); let open=false;
+  for(let i=0;i<pts.length;i++){
+    const cur=(pts[i][2]>0)===front;
+    if(cur&&!open){
+      g.moveTo(pts[i][0][0],pts[i][0][1]); open=true;
+      // 记下这段的起点索引，回程时沿外缘走回来
+      let j=i; while(j+1<pts.length&&((pts[j+1][2]>0)===front)) j++;
+      for(let m=i+1;m<=j;m++) g.lineTo(pts[m][0][0],pts[m][0][1]);
+      for(let m=j;m>=i;m--) g.lineTo(pts[m][1][0],pts[m][1][1]);
+      g.closePath(); open=false; i=j;
+    }
+  }
+  g.fillStyle=front?'rgba(255,255,255,.90)':'rgba(255,255,255,.26)';
+  g.fill();
 }
 
 /* ============================================================
