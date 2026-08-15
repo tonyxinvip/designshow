@@ -99,6 +99,17 @@ input[type=range]:focus-visible{outline:2px solid var(--gold);outline-offset:3px
   button{padding:8px 10px;font-size:12.5px}
   #bar{gap:9px;padding:9px 11px}
 }
+/* 窄屏下按钮 + 当前句 + 计时挤在一行会撑破。
+   计时是读数，Previous/Next 在窄屏有滑动和键盘可替代——先让这几个走。
+   （加 Sound 按钮之后 390px 实测横向溢出，这段是为此加的。） */
+@media (max-width:560px){
+  #clock{display:none}
+  #prev,#next{display:none}
+}
+@media (max-width:400px){
+  #now{font-size:13.5px;letter-spacing:.02em}
+  button{padding:7px 8px;font-size:12px}
+}
 </style>
 
 <div id="stage">
@@ -106,7 +117,7 @@ input[type=range]:focus-visible{outline:2px solid var(--gold);outline-offset:3px
   </head>
 <body>
 <a id="back" href="../">← Tony’s Trials</a>
-  <p id="hint">Drag to look around</p>
+  <p id="hint">Drag to look around · the piano starts the moment you touch the page</p>
   <aside id="drawer" aria-label="诗与参数">
     <h2>Full text</h2>
     <ol id="toc"></ol>
@@ -126,6 +137,7 @@ input[type=range]:focus-visible{outline:2px solid var(--gold);outline-offset:3px
     <button id="play" aria-pressed="false">Pause</button>
     <button id="prev" title="Previous">Previous</button>
     <button id="next" title="Next">Next</button>
+    <button id="sound" aria-pressed="true">Sound off</button>
   </div>
   <div id="now"></div>
   <div id="clock"></div>
@@ -161,6 +173,7 @@ const DEFAULT_POEM =
 
 const SPEC=[
   ['turn',  'Full turn',    12, 180,  1,  84,  v=>v+'s'],
+  ['readAt','Reading spot', -180, 180,  5,  90,  v=>v===90?'bottom':(v===-90?'top':v+'°')],
   ['trad',  'Ring radius',   .30,0.95,.01,0.60, v=>v.toFixed(2)],
   ['tsize', 'Text size',   0.4, 2.0,.05, 0.90, v=>v.toFixed(2)],
   ['flow',  'Tunnel flow',    -40,  60,  1,  11,  v=>v],
@@ -168,7 +181,7 @@ const SPEC=[
   ['rings', 'Rings',           8,  70,  1,  26,  v=>v],
   ['gap',   'Ring spacing',      1.03,1.28,.005,1.100,v=>v.toFixed(3)],
   ['fill',  'Glyph fill',   .35,1.30,.01,0.94, v=>v.toFixed(2)],
-  ['dens',  'Wall density',      0, 100,  1, 100,  v=>v+'%'],
+  ['wdens', 'Wall density',      0, 100,  1, 100,  v=>v+'%'],
   ['tex',   'Wall brightness',      0, 220,  1, 130,  v=>v+'%'],
   ['flick', 'Flicker',      0, 100,  1,  88,  v=>v+'%'],
   ['bloom', 'Bloom',          0, 100,  1,  55,  v=>v+'%'],
@@ -176,7 +189,17 @@ const SPEC=[
   ['core',  'Core',      0,  45,  1,  26,  v=>v+'%'],
   ['squash','Tilt',    .45,1.00,.01,0.94,  v=>v.toFixed(2)],
   ['arcs',  'Arcs',      0, 100,  1,  55,  v=>v+'%'],
+
+  ['vol',   'Volume',        0, 100,  1,  70,  v=>v+'%'],
+  ['key',   'Key',          45,  69,  1,  57,  v=>NOTE(v)],
+  ['dens',  'Notes / line',   0, 100,  1,  72,  v=>v+'%'],
+  ['bass',  'Bass',           0, 100,  1,  64,  v=>v+'%'],
+  ['pedal', 'Pedal',          0, 100,  1,  72,  v=>v+'%'],
+  ['tone',  'Tone',         400,6000, 50,2100,  v=>v+' Hz'],
+  ['rubato','Rubato',         0, 100,  1,  46,  v=>v+'%'],
 ];
+const NOTE_NAMES=['C','C♯','D','E♭','E','F','F♯','G','A♭','A','B♭','B'];
+const NOTE=m=>NOTE_NAMES[m%12]+(Math.floor(m/12)-1);
 const FLAGS=[['vertical','Vertical lines',true],['tangent','Follow the ring',false],['vig','Vignette',true]];
 
 const P={};SPEC.forEach(([k,,,,,d])=>P[k]=d);FLAGS.forEach(([k,,d])=>P[k]=d);
@@ -189,7 +212,7 @@ const smooth=t=>t<=0?0:t>=1?1:t*t*(3-2*t);
 /* ---------- UI ---------- */
 const $=id=>document.getElementById(id);
 const ui={};
-const SHOW=new Set(['turn','trad','tsize','flow','cols','tex','flick','bloom','core','arcs']);
+const SHOW=new Set(['turn','readAt','trad','tsize','flow','cols','wdens','tex','flick','bloom','core','arcs','vol','key','dens','bass','pedal','tone','rubato']);
 for(const [k,label,min,max,step,def,fmt] of SPEC){
   if(!SHOW.has(k))continue;
   const l=document.createElement('label');
@@ -345,7 +368,9 @@ function render(g,w,h,dpr,p,t,cm){
      只绕不收会显得有始无终——收束必须回到它出发的那个中心。 */
   g.globalCompositeOperation='lighter';
   const n=lines.length; if(!n)return;
-  const READ=-Math.PI/2;                          // 读位在正上方
+  // 读位默认在**正下方**：句子从环上转过来，停在黑洞的下缘读，然后被吸进去。
+  // 原来在正上方，读的时候文字压在画面顶部，重心太高。
+  const READ=p.readAt*Math.PI/180;
   // 沉入段/趋近段按「句位」计而不是按一周的固定比例：
   // 写成固定比例时，句数一多同时可见的句子就成倍增加，暗底互相叠。
   // 按句位计则任何句数下都只同时出现约六句。
@@ -425,7 +450,10 @@ function paintChrome(){
   const i=activeIdx();
   $('clock').textContent=`${T.toFixed(0)} / ${cycle().toFixed(0)}s`;
   if(i===lastIdx)return;
-  lastIdx=i;
+  const prev=lastIdx; lastIdx=i;
+  // 这一句刚转到读位——整页唯一的音乐事件源。
+  // 挂在这里而不是自己起一个时钟：turn 怎么调，乐句就怎么跟。
+  if(i>=0&&prev!==-2&&!paused) phrase(i,i===0,P.turn/Math.max(1,lines.length));
   const now=$('now');
   now.textContent=i<0?'':lines[i];
   now.classList.toggle('title',i===0);
@@ -441,6 +469,7 @@ function tick(now){
   }
   cam.panX+=(cam.tgX-cam.panX)*Math.min(1,dt*4.2);
   cam.panY+=(cam.tgY-cam.panY)*Math.min(1,dt*4.2);
+  audioSync();
   render(ctx,W,H,DPR,P,T,cam);
   paintChrome();
   requestAnimationFrame(tick);
@@ -482,6 +511,167 @@ addEventListener('keydown',e=>{
   if(e.code==='ArrowLeft')jump((activeIdx()<0?0:activeIdx())-1);
   if(e.code==='ArrowRight')jump((activeIdx()<0?-1:activeIdx())+1);
 });
+
+
+/* ============================================================
+   声音：一架合成的钢琴，跟着句子走
+
+   为什么不用现成音乐：不碰版权；站点规矩是零外部请求；
+   而且最要紧的一条——**这段动画的律动是可变的**（Full turn 从 12 秒到 180 秒），
+   用音频文件只能在某一个速度上对上，一改就散。
+
+   气质参照坂本龙一晚期独奏的语汇：慢、留白多、和声是调式色彩而不是功能进行，
+   踏板把音糊在一起。**写的是这个语汇里的原创材料，不复刻任何一首具体作品。**
+
+   合成的钢琴听感是「像钢琴」，不是采样的斯坦威——这是老实话，也是取舍：
+   换来的是零外部请求和真同步。
+   ============================================================ */
+const A={ctx:null,on:false,armed:true,last:-2,area:0,mel:2,lastNote:0};
+
+/* 调式色彩，六个区轮转。低音按二度三度走，不走五度——
+   走五度就会听出属到主的解决，那是功能和声，不是这个语汇。 */
+const AREAS=[
+  {bass: 0, tones:[0,7,10,14,17]},   // i9(11)
+  {bass:-4, tones:[0,7,11,14,18]},   // ♭VImaj7(#11)
+  {bass:-7, tones:[0,7,10,14,17]},   // iv9(11)
+  {bass:-2, tones:[0,7,10,14,16]},   // ♭VII9sus
+  {bass:-9, tones:[0,7,11,14,16]},   // ♭IIImaj9
+  {bass:-5, tones:[0,7,10,15,17]},   // v m(♭13)
+];
+const mtof=m=>440*Math.pow(2,(m-69)/12);
+
+function audioInit(){
+  const C=window.AudioContext||window.webkitAudioContext; if(!C)return false;
+  const ctx=new C(); A.ctx=ctx;
+  A.master=ctx.createGain(); A.master.gain.value=0; A.master.connect(ctx.destination);
+
+  // 踏板＝混响。脉冲响应是算出来的（噪声 × 指数衰减），零外部请求照旧成立。
+  const dur=3.6, sr=ctx.sampleRate;
+  const ir=ctx.createBuffer(2,Math.floor(sr*dur),sr);
+  for(let ch=0;ch<2;ch++){
+    const d=ir.getChannelData(ch);
+    for(let i=0;i<d.length;i++){
+      const x=i/d.length;
+      d[i]=(Math.random()*2-1)*Math.pow(1-x,2.2)*(1-Math.exp(-i/(sr*0.012)));
+    }
+  }
+  A.rev=ctx.createConvolver(); A.rev.buffer=ir;
+  A.wet=ctx.createGain(); A.wet.gain.value=0.5;
+  A.wet.connect(A.rev); A.rev.connect(A.master);
+
+  A.lp=ctx.createBiquadFilter(); A.lp.type='lowpass';
+  A.lp.frequency.value=P.tone; A.lp.Q.value=0.4;
+  A.lp.connect(A.master); A.lp.connect(A.wet);
+  return true;
+}
+
+/* 一个钢琴音。
+
+   关键是**非谐性**：真钢琴的第 n 个泛音不在 f×n，而在 f×n×√(1+Bn²)——
+   琴弦有刚度。少了这一条，加多少泛音都是风琴不是钢琴。
+   另外两条：泛音越高衰减越快；音越低整体衰减越慢（低音区余韵长得多）。 */
+function piano(freq,when,vel,sus){
+  const ctx=A.ctx; if(!ctx)return;
+  const B=0.00045+0.0009*Math.max(0,(freq-100)/700);      // 非谐性系数，高音更明显
+  const base=sus*(freq<160?1.55:freq<320?1.15:freq<640?0.82:0.55);
+  const N=6;
+  for(let n=1;n<=N;n++){
+    const f=freq*n*Math.sqrt(1+B*n*n);
+    if(f>12000) break;
+    const o=ctx.createOscillator(); o.type='sine'; o.frequency.value=f;
+    const g=ctx.createGain();
+    const amp=vel*Math.pow(n,-1.65)*(n===1?1:0.85);
+    const dec=base/(1+0.55*(n-1));                        // 高次泛音先掉
+    g.gain.setValueAtTime(0,when);
+    g.gain.linearRampToValueAtTime(amp,when+0.004);       // 4ms 起振，直接跳会爆音
+    g.gain.exponentialRampToValueAtTime(0.00008,when+dec);
+    o.connect(g); g.connect(A.lp);
+    o.start(when); o.stop(when+dec+0.05);
+  }
+  // 击弦噪声：极短的一下，没有它每个音都像是淡入的
+  const nb=ctx.createBuffer(1,Math.ceil(ctx.sampleRate*0.03),ctx.sampleRate);
+  const nd=nb.getChannelData(0);
+  for(let i=0;i<nd.length;i++) nd[i]=(Math.random()*2-1)*(1-i/nd.length);
+  const ns=ctx.createBufferSource(); ns.buffer=nb;
+  const nf=ctx.createBiquadFilter(); nf.type='bandpass';
+  nf.frequency.value=Math.min(6000,freq*4); nf.Q.value=0.8;
+  const ng=ctx.createGain(); ng.gain.value=vel*0.14;
+  ns.connect(nf); nf.connect(ng); ng.connect(A.lp); ns.start(when);
+}
+
+/* 一句到读位 → 一个乐句。
+
+   旋律在当前和弦音上做**步进随机走**，不是随机跳。
+   随机跳听起来像程序在响，步进才像有人在弹。 */
+function phrase(idx,isTitle,gapSec){
+  if(!A.on||!A.ctx) return;
+  const ctx=A.ctx, t0=ctx.currentTime+0.02;
+  if(idx%3===0) A.area=(A.area+1)%AREAS.length;            // 每三句换一次和声色彩
+  const ar=AREAS[A.area], root=P.key;
+
+  // 低音：换和声时才落一个，而且很轻。这个语汇里低音是地板不是节奏
+  if(idx%3===0 && P.bass>0)
+    piano(mtof(root+ar.bass-12),t0,0.16*P.bass/100,1.0);
+  if(isTitle && P.bass>0)
+    piano(mtof(root+ar.bass-24),t0,0.20*P.bass/100,1.0);
+
+  // 一句能占多长：句子间隔的六成，最多 2.6 秒。
+  // turn 调快时句子挤在一起，乐句要跟着缩——不缩就会互相踩。
+  const span=Math.min(2.6,Math.max(0.25,gapSec*0.6));
+  const nMax=isTitle?5:Math.max(1,Math.round(P.dens/100*4));
+  const n=Math.max(1,Math.min(nMax,Math.round(span/0.34)));
+
+  for(let k=0;k<n;k++){
+    // 步进：±1 个和弦音，偶尔停在原地
+    const step=[-1,-1,0,1,1,2][Math.floor(Math.random()*6)];
+    A.mel=Math.max(0,Math.min(ar.tones.length*2-1,A.mel+step));
+    const oct=Math.floor(A.mel/ar.tones.length);
+    const deg=ar.tones[A.mel%ar.tones.length];
+    const midi=root+ar.bass+deg+12*(1+oct);
+    // 弹性节奏：每个音的间隔不等，越靠后越松
+    const rub=1+(Math.random()-0.5)*P.rubato/100*0.9;
+    const at=t0+span*(k/n)*rub+ (k?0.02*Math.random():0);
+    const vel=(isTitle?0.20:0.15)*(0.72+Math.random()*0.42)*(k===0?1.15:0.9);
+    piano(mtof(midi),at,vel,1.0);
+    // 偶尔叠一个下方六度，坂本很常见的那种空隙
+    if(!isTitle && k===0 && Math.random()<0.34)
+      piano(mtof(midi-9),at+0.03,vel*0.55,1.0);
+  }
+}
+
+function audioSync(){
+  if(!A.on||!A.ctx)return;
+  const t=A.ctx.currentTime;
+  A.master.gain.setTargetAtTime(P.vol/100*0.62,t,0.15);
+  A.lp.frequency.setTargetAtTime(P.tone,t,0.2);
+  A.wet.gain.setTargetAtTime(P.pedal/100*0.9,t,0.25);
+}
+
+async function soundToggle(force){
+  const b=$('sound');
+  const want = force===undefined ? !A.on : force;
+  if(want){
+    if(!A.ctx&&!audioInit()){b.textContent='No audio';b.disabled=true;A.armed=false;return}
+    await A.ctx.resume();
+    A.on=true; A.armed=true;
+    b.textContent='Sound off'; b.setAttribute('aria-pressed','true');
+  }else{
+    A.on=false; A.armed=false;
+    if(A.ctx) A.master.gain.setTargetAtTime(0,A.ctx.currentTime,0.15);
+    b.textContent='Sound on'; b.setAttribute('aria-pressed','false');
+  }
+}
+$('sound').addEventListener('click',()=>soundToggle());
+
+/* 默认开着，但浏览器不许未经手势出声——这是硬约束，不是设置能绕过的。
+   所以「默认开」的正确含义是**默认武装**：任何一下交互（点、按键、滚动、触摸）
+   都会让它立刻响，用户不用去找按钮。 */
+function firstGesture(){
+  if(A.armed&&!A.on) soundToggle(true);
+  ['pointerdown','keydown','wheel','touchstart'].forEach(ev=>removeEventListener(ev,firstGesture));
+}
+['pointerdown','keydown','wheel','touchstart'].forEach(ev=>
+  addEventListener(ev,firstGesture,{passive:true}));
 
 /* ---------- 目录 ---------- */
 function buildTOC(){

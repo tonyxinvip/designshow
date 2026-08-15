@@ -60,7 +60,7 @@
 <div id="stage">
   <canvas id="cv"></canvas>
   <a id="back" href="../">← Tony’s Trials</a>
-  <p id="hint">Drag to aim · scroll to zoom · sound is off until you turn it on</p>
+  <p id="hint">Drag to aim · scroll to zoom · sound starts the moment you touch the page</p>
   <aside id="panel" aria-label="Controls">
     <h2>Dome</h2><div id="g-d"></div>
     <h2>Colour</h2><div id="g-c"></div>
@@ -83,7 +83,7 @@
 <div id="bar">
   <button id="play" aria-pressed="false">Pause</button>
   <button id="reseed">New dome</button>
-  <button id="sound" aria-pressed="false">Sound on</button>
+  <button id="sound" aria-pressed="true">Sound off</button>
   <div id="title">Oculus</div>
   <div id="fps"></div>
   <button id="toggle" aria-pressed="false" aria-controls="panel">Controls</button>
@@ -734,7 +734,7 @@ function composite(T,R,cx,cy){
    音阶用全音阶 [0,2,4,6,8,10]：没有半音就没有导音，任何两个音都不构成解决关系，
    耳朵找不到主音。「悬着的」这个感觉是这么来的，不是靠加混响。
    ============================================================ */
-const A={ctx:null,on:false,t0:0,lastBell:0,sweepUntil:0};
+const A={ctx:null,on:false,armed:true,t0:0,lastBell:0,sweepUntil:0};
 const WHOLE=[0,2,4,6,8,10];
 const mtof=m=>440*Math.pow(2,(m-69)/12);
 let glowNow=0;
@@ -874,14 +874,14 @@ function audioSync(){
   glowNow=P.padGlow?0.5+0.5*Math.sin((t-A.t0)*0.19):0;
 }
 
-async function soundToggle(){
+async function soundToggle(force){
   const b=$('sound');
-  if(!A.on){
-    if(!A.ctx&&!audioInit()){b.textContent='No audio';b.disabled=true;return}
+  if(force===undefined?!A.on:force){
+    if(!A.ctx&&!audioInit()){b.textContent='No audio';b.disabled=true;A.armed=false;return}
     await A.ctx.resume();
-    A.on=true; b.textContent='Sound off'; b.setAttribute('aria-pressed','true');
+    A.on=true; A.armed=true; b.textContent='Sound off'; b.setAttribute('aria-pressed','true');
   }else{
-    A.on=false;
+    A.on=false; A.armed=false;
     A.master.gain.setTargetAtTime(0,A.ctx.currentTime,0.08);
     glowNow=0;
     b.textContent='Sound on'; b.setAttribute('aria-pressed','false');
@@ -944,13 +944,26 @@ cv.addEventListener('wheel',e=>{e.preventDefault();
 $('play').addEventListener('click',()=>{paused=!paused;
   $('play').textContent=paused?'Play':'Pause';$('play').setAttribute('aria-pressed',paused);last=performance.now()});
 $('reseed').addEventListener('click',()=>{P.seed='oculus-'+Math.floor(Math.random()*1e9);build();lastStep.length=0});
-$('sound').addEventListener('click',soundToggle);
+// 不能直接把 soundToggle 当监听器：浏览器会把 Event 对象当第一个参数传进去，
+// force 收到一个真值，按钮就只会开不会关。必须包一层。
+$('sound').addEventListener('click',()=>soundToggle());
 $('toggle').addEventListener('click',()=>{const o=$('panel').classList.toggle('open');
   $('toggle').setAttribute('aria-pressed',o)});
 addEventListener('keydown',e=>{
   if(e.key===' '){e.preventDefault();$('play').click()}
   if(e.key==='Escape'&&$('panel').classList.contains('open'))$('toggle').click();
 });
+
+
+/* 默认开着，但**浏览器不许未经手势出声**——这是硬约束，不是设置能绕过的。
+   所以「默认开」的正确含义是**默认武装**：任何一下交互（点、按键、滚动、触摸）
+   都让它立刻响，用户不必去找按钮。提示文案要说清楚，否则会以为坏了。 */
+function firstGesture(){
+  if(A.armed&&!A.on) soundToggle(true);
+  ['pointerdown','keydown','wheel','touchstart'].forEach(ev=>removeEventListener(ev,firstGesture));
+}
+['pointerdown','keydown','wheel','touchstart'].forEach(ev=>
+  addEventListener(ev,firstGesture,{passive:true}));
 
 resize(); build();
 // NaN 会让「跳变」静默失效且不报错，所以开页时自检一次：同一圈在一个周期内

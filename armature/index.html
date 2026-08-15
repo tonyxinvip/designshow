@@ -60,7 +60,7 @@
 <div id="stage">
   <canvas id="cv"></canvas>
   <a id="back" href="../">← Tony’s Trials</a>
-  <p id="hint">Drag to steer · scroll to change speed · sound is off until you turn it on</p>
+  <p id="hint">Drag to steer · scroll to change speed · sound starts the moment you touch the page</p>
   <aside id="panel" aria-label="Controls">
     <h2>Structure</h2><div id="g-s"></div>
     <h2>Camera &amp; light</h2><div id="g-c"></div>
@@ -78,7 +78,7 @@
   <button id="play" aria-pressed="false">Pause</button>
   <button id="reset">Recentre</button>
   <button id="reseed">New lattice</button>
-  <button id="sound" aria-pressed="false">Sound on</button>
+  <button id="sound" aria-pressed="true">Sound off</button>
   <div id="title">Armature</div>
   <div id="fps"></div>
   <button id="toggle" aria-pressed="false" aria-controls="panel">Controls</button>
@@ -317,7 +317,7 @@ function render(g,w,h,dpr,p,cm){
 
    浏览器不允许未经用户手势就出声，所以必须点一下才启动。这是硬约束。
    ============================================================ */
-const A={ctx:null,on:false,t0:0,step:0,nextT:0,beat:0,lastBeat:-1,ringHits:0};
+const A={ctx:null,on:false,armed:true,t0:0,step:0,nextT:0,beat:0,lastBeat:-1,ringHits:0};
 const PENT=[0,3,5,7,10];                       // 小调五声：太空电子最不容易难听的音阶
 const mtof=m=>440*Math.pow(2,(m-69)/12);
 
@@ -441,16 +441,16 @@ function audioSync(){
   A.beat=(A.ctx.currentTime-A.t0)/(60/P.bpm);
 }
 
-async function soundToggle(){
+async function soundToggle(force){
   const btn=$('sound');
-  if(!A.on){
-    if(!A.ctx && !audioInit()){ btn.textContent='No audio'; btn.disabled=true; return; }
+  if(force===undefined?!A.on:force){
+    if(!A.ctx && !audioInit()){ btn.textContent='No audio'; btn.disabled=true; A.armed=false; return; }
     await A.ctx.resume();
     A.t0=A.ctx.currentTime; A.nextT=A.ctx.currentTime+0.08; A.step=0;
-    A.on=true; btn.textContent='Sound off'; btn.setAttribute('aria-pressed','true');
+    A.on=true; A.armed=true; btn.textContent='Sound off'; btn.setAttribute('aria-pressed','true');
     A.timer=setInterval(audioSchedule,25);
   }else{
-    A.on=false; clearInterval(A.timer);
+    A.on=false; A.armed=false; clearInterval(A.timer);
     A.master.gain.setTargetAtTime(0,A.ctx.currentTime,0.05);
     btn.textContent='Sound on'; btn.setAttribute('aria-pressed','false');
   }
@@ -509,9 +509,22 @@ function setPaused(v){paused=v;const b=$('play');b.textContent=v?'Play':'Pause';
 $('play').onclick=()=>setPaused(!paused);
 $('reset').onclick=()=>{cam.tgX=0.42;cam.tgY=-0.26;cam.push=0};
 $('reseed').onclick=()=>{P.seed=Math.random().toString(36).slice(2,9);build()};
-$('sound').onclick=soundToggle;
+// 不能直接把 soundToggle 当监听器：浏览器会把 Event 对象当第一个参数传进去，
+// force 收到一个真值，按钮就只会开不会关。必须包一层。
+$('sound').onclick=()=>soundToggle();
 $('toggle').onclick=e=>{const open=$('panel').classList.toggle('open');
   e.currentTarget.setAttribute('aria-pressed',open?'true':'false')};
+
+
+/* 默认开着，但**浏览器不许未经手势出声**——这是硬约束，不是设置能绕过的。
+   所以「默认开」的正确含义是**默认武装**：任何一下交互（点、按键、滚动、触摸）
+   都让它立刻响，用户不必去找按钮。提示文案要说清楚，否则会以为坏了。 */
+function firstGesture(){
+  if(A.armed&&!A.on) soundToggle(true);
+  ['pointerdown','keydown','wheel','touchstart'].forEach(ev=>removeEventListener(ev,firstGesture));
+}
+['pointerdown','keydown','wheel','touchstart'].forEach(ev=>
+  addEventListener(ev,firstGesture,{passive:true}));
 
 resize(); build();
 if(reduce){setPaused(true);$('hint').textContent='Paused for reduced motion. Press Play to start.'}
