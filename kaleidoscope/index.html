@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>万华镜生成器 · designshow</title>
+<title>Kaleidoscope · Tony’s Trials</title>
 <style>
   :root{
     --shell:#0a0c10; --panel:#12151c; --line:#232833;
@@ -67,41 +67,41 @@
 <div id="stage"><canvas id="cv" width="900" height="900"></canvas></div>
 
 <div id="panel">
-  <h1>万华镜生成器</h1>
-  <p class="sub">D<sub>N</sub> 镜像对称 · Droste 递归 · 粒子泼溅</p>
+  <h1>Kaleidoscope</h1>
+  <p class="sub">D<sub>N</sub>  mirror symmetry · Droste recursion · particle spray</p>
 
   <div class="btns">
-    <button id="rand" class="primary">随机一张</button>
-    <button id="reroll">换母题</button>
-    <button id="png" class="wide">导出 4K PNG</button>
+    <button id="rand" class="primary">Randomize</button>
+    <button id="reroll">New motif</button>
+    <button id="png" class="wide">Export 4K PNG</button>
   </div>
   <label style="margin-top:10px">
-    <div class="row"><b>种子</b><span id="seedTxt"></span></div>
+    <div class="row"><b>Seed</b><span id="seedTxt"></span></div>
     <input type="text" id="seed" spellcheck="false">
   </label>
-  <p class="hint">同一串种子 + 同一组参数 = 完全相同的图。调好了就「复制参数」存下来。</p>
+  <p class="hint">Same seed and parameters give the same image. Copy the parameters once you like one.</p>
 
-  <fieldset><legend>对称与递归</legend><div id="g-sym"></div>
+  <fieldset><legend>Symmetry & recursion</legend><div id="g-sym"></div>
     <p class="hint" id="nest">&nbsp;</p></fieldset>
-  <fieldset><legend>母题</legend><div id="g-motif"></div></fieldset>
-  <fieldset><legend>颜色</legend><div id="g-color"></div></fieldset>
-  <fieldset><legend>粒子与光</legend><div id="g-dust"></div></fieldset>
-  <fieldset><legend>开关</legend><div class="checks" id="g-flags"></div></fieldset>
+  <fieldset><legend>Motif</legend><div id="g-motif"></div></fieldset>
+  <fieldset><legend>Colour</legend><div id="g-color"></div></fieldset>
+  <fieldset><legend>Particles & light</legend><div id="g-dust"></div></fieldset>
+  <fieldset><legend>Toggles</legend><div class="checks" id="g-flags"></div></fieldset>
 
   <div class="btns" style="margin-top:14px">
-    <button id="copy">复制参数</button>
-    <button id="paste">读入参数</button>
+    <button id="copy">Copy params</button>
+    <button id="paste">Paste params</button>
   </div>
   <p class="hint" id="status">&nbsp;</p>
   <footer>
-    <div>作者：<b>辛海洋</b></div>
+    <div><b>Tony Xin</b></div>
     <div><time datetime="2026-08-15">2026-08-15</time></div>
   </footer>
 </div>
 
 <script>
 /* ============================================================
-   万华镜生成器
+   Kaleidoscope
    五层：0 底 · 1 背景粒子 · 2 万花筒环(Droste) · 3 彗尾 · 4 前景粒子
    几何全部以 R(半径) 为单位 → 任何画布尺寸构图完全一致，导出即放大。
    ============================================================ */
@@ -113,31 +113,31 @@ const RG=r=>(r()+r()+r()-1.5)*0.8;   // 近似高斯，均值 0
 
 /* ---------- 参数表 ---------- */
 const SPEC=[
-  ['sym',   'g-sym',  '对称重数 N',     3,   24,  1,    8,   v=>v],
-  ['depth', 'g-sym',  '递归层数',       1,    9,  1,    5,   v=>v],
-  ['shrink','g-sym',  '每层缩放',    0.30, 0.90, .01, 0.46, v=>v.toFixed(2)],
-  ['twist', 'g-sym',  '每层旋转',       0,   60,  1,   17,   v=>v+'°'],
+  ['sym',   'g-sym',  'Fold count N',     3,   24,  1,    8,   v=>v],
+  ['depth', 'g-sym',  'Recursion depth',       1,    9,  1,    5,   v=>v],
+  ['shrink','g-sym',  'Scale per layer',    0.30, 0.90, .01, 0.46, v=>v.toFixed(2)],
+  ['twist', 'g-sym',  'Twist per layer',       0,   60,  1,   17,   v=>v+'°'],
 
-  ['hollow','g-motif','中空半径',    0.10, 0.70, .01, 0.36, v=>v.toFixed(2)],
-  ['reach', 'g-motif','外缘半径',    0.55, 1.10, .01, 0.90, v=>v.toFixed(2)],
-  ['blades','g-motif','每格叶片数',     1,    5,  1,    2,   v=>v],
-  ['organ', 'g-motif','形状随机度',  0.05, 0.60, .01, 0.26, v=>v.toFixed(2)],
-  ['wings', 'g-motif','外圈长翼',       0,    8,  1,    4,   v=>v],
-  ['shards','g-motif','内圈碎片',       0,   10,  1,    4,   v=>v],
+  ['hollow','g-motif','Inner radius',    0.10, 0.70, .01, 0.36, v=>v.toFixed(2)],
+  ['reach', 'g-motif','Outer radius',    0.55, 1.10, .01, 0.90, v=>v.toFixed(2)],
+  ['blades','g-motif','Blades per cell',     1,    5,  1,    2,   v=>v],
+  ['organ', 'g-motif','Shape jitter',  0.05, 0.60, .01, 0.26, v=>v.toFixed(2)],
+  ['wings', 'g-motif','Outer wings',       0,    8,  1,    4,   v=>v],
+  ['shards','g-motif','Inner shards',       0,   10,  1,    4,   v=>v],
 
-  ['hue0',  'g-color','起始色相',       0,  360,  1,   96,   v=>v+'°'],
-  ['span',  'g-color','环向色相跨度',   0,  360,  1,   70,   v=>v+'°'],
-  ['rim',   'g-color','描边色偏移',     0,  360,  1,  268,   v=>'+'+v+'°'],
-  ['sat',   'g-color','饱和度',        30,  100,  1,   86,   v=>v+'%'],
-  ['dustH', 'g-color','粒子色相',       0,  360,  1,   78,   v=>v+'°'],
+  ['hue0',  'g-color','Start hue',       0,  360,  1,   96,   v=>v+'°'],
+  ['span',  'g-color','Hue span',   0,  360,  1,   70,   v=>v+'°'],
+  ['rim',   'g-color','Rim hue shift',     0,  360,  1,  268,   v=>'+'+v+'°'],
+  ['sat',   'g-color','Saturation',        30,  100,  1,   86,   v=>v+'%'],
+  ['dustH', 'g-color','Dust hue',       0,  360,  1,   78,   v=>v+'°'],
 
-  ['dust',  'g-dust', '粒子数量',     300,12000, 100, 6000,  v=>v],
-  ['bands', 'g-dust', '环带数',         0,    6,  1,    3,   v=>v],
-  ['grain', 'g-dust', '粒子大小',     0.4,  3.0, .1,  1.2,   v=>v.toFixed(1)],
-  ['comet', 'g-dust', '彗尾数量',       0,   90,  1,   26,   v=>v],
-  ['glow',  'g-dust', '辉光强度',       0,   30,  1,   13,   v=>v],
+  ['dust',  'g-dust', 'Dust count',     300,12000, 100, 6000,  v=>v],
+  ['bands', 'g-dust', 'Bands',         0,    6,  1,    3,   v=>v],
+  ['grain', 'g-dust', 'Grain size',     0.4,  3.0, .1,  1.2,   v=>v.toFixed(1)],
+  ['comet', 'g-dust', 'Comets',       0,   90,  1,   26,   v=>v],
+  ['glow',  'g-dust', 'Glow',       0,   30,  1,   13,   v=>v],
 ];
-const FLAGS=[['neighbor','邻镜残影',true],['vignette','暗角',true],['filigree','嵌套纹样',true]];
+const FLAGS=[['neighbor','Neighbour tile',true],['vignette','Vignette',true],['filigree','Nested tracery',true]];
 
 const P={};
 SPEC.forEach(([k,,,,,,d])=>P[k]=d);
@@ -175,11 +175,11 @@ function syncUI(){
   $('seed').value=P.seed;$('seedTxt').textContent=P.motifSeed;
   // 无缝嵌套的临界缩放：外缘缩到中空口时刚好接上
   const s=P.hollow/P.reach;
-  $('nest').textContent=`无缝嵌套缩放 ≈ ${s.toFixed(2)}`+
-    (P.shrink>s+0.06?'（当前偏大：层与层会叠压）':P.shrink<s-0.06?'（当前偏小：层与层会脱开留黑）':'（当前刚好）');
+  $('nest').textContent=`Seamless nesting ≈ ${s.toFixed(2)}`+
+    (P.shrink>s+0.06?' (too large: layers overlap)':P.shrink<s-0.06?' (too small: gaps open between layers)':' (just right)');
 }
 
-/* ---------- 母题：一次生成，各层复用 ---------- */
+/* ---------- Motif：一次生成，各层复用 ---------- */
 /* 只画半格 [0, π/N]，镜像后得到整格 → 群是 D_N（有镜面）而不是 C_N（只有旋转） */
 function buildMotif(seedStr,p){
   const r=mulberry32(hashStr(seedStr));
@@ -445,20 +445,20 @@ $('png').onclick=()=>{
   off.toBlob(b=>{
     const u=URL.createObjectURL(b),a=document.createElement('a');
     a.href=u;a.download=`kaleido-${P.seed}-${P.motifSeed}.png`;a.click();
-    setTimeout(()=>URL.revokeObjectURL(u),4000);say('已导出 3840×3840');
+    setTimeout(()=>URL.revokeObjectURL(u),4000);say('Exported 3840×3840');
   },'image/png');
 };
 
 function say(t){$('status').textContent=t;setTimeout(()=>{$('status').innerHTML='&nbsp;'},2600)}
 $('copy').onclick=async()=>{
   const s=JSON.stringify(P);
-  try{await navigator.clipboard.writeText(s);say('参数已复制')}
-  catch(e){$('seed').value=s;say('剪贴板不可用，参数已放进种子框')}
+  try{await navigator.clipboard.writeText(s);say('Parameters copied')}
+  catch(e){$('seed').value=s;say('Clipboard unavailable, parameters put in the seed box')}
 };
 $('paste').onclick=async()=>{
   let s='';try{s=await navigator.clipboard.readText()}catch(e){s=$('seed').value}
-  try{Object.assign(P,JSON.parse(s));draw();say('参数已读入')}
-  catch(e){say('不是合法的参数 JSON')}
+  try{Object.assign(P,JSON.parse(s));draw();say('Parameters loaded')}
+  catch(e){say('Not valid parameter JSON')}
 };
 
 draw();

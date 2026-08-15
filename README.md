@@ -1,21 +1,23 @@
 # Tony's Trials
 
-辛海洋做的东西。能在浏览器里跑的那种。
+Things Tony Xin made. The kind that run in a browser.
 
-**站点** https://tonyxinvip.github.io/designshow/
+**Site** https://tonyxinvip.github.io/designshow/
 
-| 作品 | 发布 | 说明 |
+| Work | Published | Notes |
 |---|---|---|
-| [人生海海](letter/) | 2026-08-15 | 一封朋友手写的信做成的文字隧道。文字经本人授权 |
-| [万华镜生成器](kaleidoscope/) | 2026-08-15 | 镜像对称 + 递归卷心 + 粒子泼溅。参数全露在外面，导出 4K PNG |
+| [Life Is an Ocean](letter/) | 2026-08-15 | A friend's handwritten letter, in Chinese, turned into a tunnel of its own characters. Text used with permission |
+| [Kaleidoscope](kaleidoscope/) | 2026-08-15 | Mirror symmetry, recursive nesting, particle spray. Every parameter is on the panel. Exports 3840 × 3840 PNG |
 
-## 约定
+## Conventions
 
-- 每件作品一个目录，网址即 `/designshow/<目录名>/`
-- 页面自包含：CSS/JS/媒体全内联，断网能打开，不发任何外部请求
-- 页脚只放两样：`作者：辛海洋` 与发布日期
-- 推送前必须跑闸门，**不过就不要推**：
+- One directory per work. The URL is `/designshow/<directory>/`
+- Pages are self-contained: CSS, scripts and media inlined. They open offline and make no outside requests
+- The footer carries two things only: `Tony Xin` and the publication date
+- Run the gate before pushing. **If it fails, do not push:**
 
 ```bash
 bash scripts/check-publish.sh
 ```
+
+Source comments are in Chinese. They are maintenance notes, not part of the site.

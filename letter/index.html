@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="一封朋友手写的信，做成会转的文字隧道。">
-<title>人生海海</title>
+<title>Life Is an Ocean</title>
 <style>
 /* 单一深色主题：作品本身是黑底发光，浅色主题会毁掉它。
    这是选择，不是遗漏——所以每个颜色都显式声明，不借宿主背景。 */
@@ -106,16 +106,16 @@ input[type=range]:focus-visible{outline:2px solid var(--gold);outline-offset:3px
   </head>
 <body>
 <a id="back" href="../">← Tony’s Trials</a>
-  <p id="hint">拖动画面可改变视角</p>
+  <p id="hint">Drag to look around</p>
   <aside id="drawer" aria-label="诗与参数">
-    <h2>全文</h2>
+    <h2>Full text</h2>
     <ol id="toc"></ol>
-    <h2>调整</h2>
+    <h2>Controls</h2>
     <div id="g"></div>
-    <p class="note">隧道的每一个背景字都取自这封信本身。</p>
+    <p class="note">Every character in the wall is taken from the letter itself.</p>
     <p class="credit">
-      文字：友人手书，经本人授权<br>
-      作品：<b>辛海洋</b><br>
+      Text: from a friend’s letter, used with permission<br>
+      Work: <b>Tony Xin</b><br>
       <time datetime="2026-08-15">2026-08-15</time>
     </p>
   </aside>
@@ -123,20 +123,20 @@ input[type=range]:focus-visible{outline:2px solid var(--gold);outline-offset:3px
 
 <div id="bar">
   <div class="grp">
-    <button id="play" aria-pressed="false">暂停</button>
-    <button id="prev" title="上一句">上一句</button>
-    <button id="next" title="下一句">下一句</button>
+    <button id="play" aria-pressed="false">Pause</button>
+    <button id="prev" title="Previous">Previous</button>
+    <button id="next" title="Next">Next</button>
   </div>
   <div id="now"></div>
   <div id="clock"></div>
   <div class="grp">
-    <button id="toggle" aria-pressed="false" aria-controls="drawer">全诗 / 调整</button>
+    <button id="toggle" aria-pressed="false" aria-controls="drawer">Text / Controls</button>
   </div>
 </div>
 
 <script>
 const DEFAULT_POEM =
-`人生海海
+`Life Is an Ocean
 这么顺的日子
 不写点啥
 怪不好意思
@@ -160,27 +160,27 @@ const DEFAULT_POEM =
 岁岁安澜`;
 
 const SPEC=[
-  ['turn',  '环绕一周',    12, 180,  1,  84,  v=>v+'s'],
-  ['trad',  '句子半径',   .30,0.95,.01,0.60, v=>v.toFixed(2)],
-  ['tsize', '句子字号',   0.4, 2.0,.05, 0.90, v=>v.toFixed(2)],
-  ['flow',  '隧道流速',    -40,  60,  1,  11,  v=>v],
-  ['cols',  '每环字数',      16, 140,  1,  68,  v=>v],
-  ['rings', '环数',           8,  70,  1,  26,  v=>v],
-  ['gap',   '环间距',      1.03,1.28,.005,1.100,v=>v.toFixed(3)],
-  ['fill',  '字号占格比',   .35,1.30,.01,0.94, v=>v.toFixed(2)],
-  ['dens',  '纹理密度',      0, 100,  1, 100,  v=>v+'%'],
-  ['tex',   '纹理亮度',      0, 220,  1, 130,  v=>v+'%'],
-  ['flick', '闪烁强度',      0, 100,  1,  88,  v=>v+'%'],
-  ['bloom', '光晕',          0, 100,  1,  55,  v=>v+'%'],
-  ['fspd',  '闪烁速度',    0.2, 3.0,.05, 1.0,  v=>v.toFixed(2)+'×'],
-  ['core',  '中心黑洞',      0,  45,  1,  26,  v=>v+'%'],
-  ['squash','倾斜压扁',    .45,1.00,.01,0.94,  v=>v.toFixed(2)],
-  ['arcs',  '亮环密度',      0, 100,  1,  55,  v=>v+'%'],
+  ['turn',  'Full turn',    12, 180,  1,  84,  v=>v+'s'],
+  ['trad',  'Ring radius',   .30,0.95,.01,0.60, v=>v.toFixed(2)],
+  ['tsize', 'Text size',   0.4, 2.0,.05, 0.90, v=>v.toFixed(2)],
+  ['flow',  'Tunnel flow',    -40,  60,  1,  11,  v=>v],
+  ['cols',  'Glyphs per ring',      16, 140,  1,  68,  v=>v],
+  ['rings', 'Rings',           8,  70,  1,  26,  v=>v],
+  ['gap',   'Ring spacing',      1.03,1.28,.005,1.100,v=>v.toFixed(3)],
+  ['fill',  'Glyph fill',   .35,1.30,.01,0.94, v=>v.toFixed(2)],
+  ['dens',  'Wall density',      0, 100,  1, 100,  v=>v+'%'],
+  ['tex',   'Wall brightness',      0, 220,  1, 130,  v=>v+'%'],
+  ['flick', 'Flicker',      0, 100,  1,  88,  v=>v+'%'],
+  ['bloom', 'Bloom',          0, 100,  1,  55,  v=>v+'%'],
+  ['fspd',  'Flicker speed',    0.2, 3.0,.05, 1.0,  v=>v.toFixed(2)+'×'],
+  ['core',  'Core',      0,  45,  1,  26,  v=>v+'%'],
+  ['squash','Tilt',    .45,1.00,.01,0.94,  v=>v.toFixed(2)],
+  ['arcs',  'Arcs',      0, 100,  1,  55,  v=>v+'%'],
 ];
-const FLAGS=[['vertical','诗句竖排',true],['tangent','随圈朝向',false],['vig','暗角',true]];
+const FLAGS=[['vertical','Vertical lines',true],['tangent','Follow the ring',false],['vig','Vignette',true]];
 
 const P={};SPEC.forEach(([k,,,,,d])=>P[k]=d);FLAGS.forEach(([k,,d])=>P[k]=d);
-P.poem=DEFAULT_POEM; P.bsz=0.60; P.bal=0.90;   // 光晕半径系数 / 强度系数
+P.poem=DEFAULT_POEM; P.bsz=0.60; P.bal=0.90;   // Bloom半径系数 / 强度系数
 
 function hashStr(s){let h=2166136261>>>0;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)>>>0}return h>>>0}
 function mulberry32(a){return function(){a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
@@ -207,8 +207,8 @@ for(const [k,label,min,max,step,def,fmt] of SPEC){
 // 列数多于此值 → 字在径向互相重叠 → 糊成一片而不是一格一格的亮块。踩过两次。
 function cellHint(){
   const ideal=6.2832/(1-1/P.gap), ratio=P.cols/ideal;
-  (document.getElementById('cellHint')||{}).textContent=`方格列数 ≈ ${Math.round(ideal)}`+
-    (ratio>1.12?'（当前偏多：字径向重叠，会糊）':ratio<0.88?'（当前偏少：行间露黑缝）':'（当前接近方格）');
+  (document.getElementById('cellHint')||{}).textContent=`Square-cell columns ≈ ${Math.round(ideal)}`+
+    (ratio>1.12?' (too many: glyphs overlap radially)':ratio<0.88?' (too few: gaps open between rows)':' (near square)');
 }
 
 /* ---------- 精灵图：纹理层每个「字×色调」只光栅化一次 ---------- */
@@ -300,7 +300,7 @@ function render(g,w,h,dpr,p,t,cm){
     if(a<=0.012)continue;
     const set=sprites[it.s%sprites.length]; if(!set)continue;
     const sz=Math.min(size,150), img=set[it.t<0.055?1:(it.t<0.095?2:0)];
-    // 亮起来的字要晕开：参考拍的是实体灯光装置，光晕才是亮像素的主要来源。
+    // 亮起来的字要晕开：参考拍的是实体灯光装置，Bloom才是亮像素的主要来源。
     // 用同一张精灵放大一圈低透明度垫在下面，additive 叠加即得（比 shadowBlur 便宜得多）
     if(a>0.42&&p.bloom>0){
       const bs=sz*(1+p.bloom/100*p.bsz);
@@ -328,9 +328,9 @@ function render(g,w,h,dpr,p,t,cm){
     g.globalAlpha=1;
   }
 
-  /* --- 中心黑洞：压在纹理之上、诗句之下，诗句才像从洞里走出来 --- */
+  /* --- Core：压在纹理之上、诗句之下，诗句才像从洞里走出来 --- */
   if(p.core>0){
-    // 洞的大小直接给比例：参考画面里它占了很大一块，靠环数推算出不来
+    // 洞的大小直接给比例：参考画面里它占了很大一块，靠Rings推算出不来
     const rc=Math.max(Math.min(w,h)*p.core/100,(f/(Z_NEAR*Math.pow(p.gap,p.rings-1)))*1.6);
     g.globalCompositeOperation='source-over';
     const rg=g.createRadialGradient(cx,cy,0,cx,cy,rc);
@@ -341,7 +341,7 @@ function render(g,w,h,dpr,p,t,cm){
 
   /* --- 读句层：转进来 → 读位 → 旋转着沉入黑洞 --- */
   /* 每句走一条完整的弧：从外围淡入、绕行趋近正上方「读位」（最大最亮）、
-     越过读位后一边继续旋转一边向内收，最后消失在中心黑洞里。
+     越过读位后一边继续旋转一边向内收，最后消失在Core里。
      只绕不收会显得有始无终——收束必须回到它出发的那个中心。 */
   g.globalCompositeOperation='lighter';
   const n=lines.length; if(!n)return;
@@ -385,7 +385,7 @@ function render(g,w,h,dpr,p,t,cm){
 
     g.save();
     g.translate(px,py);
-    if(p.tangent)g.rotate(ang+Math.PI/2);         // 随圈朝向（底部会倒置）
+    if(p.tangent)g.rotate(ang+Math.PI/2);         // Follow the ring（底部会倒置）
     g.font=`${isTitle?600:400} ${fs}px ${FONT}`;
     g.textAlign='center';g.textBaseline='middle';
     const warm=isTitle?'236,196,126':(alpha>0.55?'255,255,255':'214,198,168');
@@ -461,7 +461,7 @@ addEventListener('pointerup',()=>{dragging=false;cv.classList.remove('drag')});
 function setPaused(v){
   paused=v;
   const b=$('play');
-  b.textContent=v?'播放':'暂停';
+  b.textContent=v?'Play':'Pause';
   b.setAttribute('aria-pressed',v?'true':'false');
 }
 function jump(i){
@@ -496,7 +496,7 @@ function buildTOC(){
 }
 
 resize(); rebuildAll(); buildTOC(); cellHint();
-if(reduce){ setPaused(true); $('hint').textContent='已按系统「减弱动效」暂停 · 点播放开始'; }
+if(reduce){ setPaused(true); $('hint').textContent='Paused for reduced motion. Press Play to start.'; }
 setTimeout(()=>$('hint').classList.add('gone'),6000);
 requestAnimationFrame(tick);
 

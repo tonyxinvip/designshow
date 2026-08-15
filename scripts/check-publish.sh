@@ -21,8 +21,8 @@ for f in $PAGES; do
   n=${f#./}
   grep -qi '<meta charset="utf-8">' "$f" \
     && ok "$n charset" || no "$n 缺 <meta charset=\"utf-8\">（漏了整页中文变乱码，且构建期零报错）"
-  grep -q '辛海洋' "$f" \
-    && ok "$n 署名" || no "$n 页脚缺署名「辛海洋」"
+  grep -q 'Tony Xin' "$f" \
+    && ok "$n byline" || no "$n footer is missing the byline: Tony Xin"
   grep -qE '<time datetime="[0-9]{4}-[0-9]{2}-[0-9]{2}"' "$f" \
     && ok "$n 发布日期" || no "$n 缺 <time datetime=\"YYYY-MM-DD\"> 发布日期"
 done
