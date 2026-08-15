@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>万华镜生成器 · designshow</title>
+<style>
+  :root{
+    --shell:#0a0c10; --panel:#12151c; --line:#232833;
+    --text:#e7ecf4; --muted:#8b96a8; --accent:#5ad1ff;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    background:var(--shell); color:var(--text);
+    font:14px/1.6 Inter,system-ui,-apple-system,"PingFang SC","Noto Sans SC",sans-serif;
+    display:flex; overflow:hidden;
+  }
+  #stage{flex:1;display:flex;align-items:center;justify-content:center;padding:16px;min-width:0}
+  #cv{max-width:100%;max-height:100%;aspect-ratio:1;border-radius:6px;
+      box-shadow:0 0 0 1px var(--line),0 24px 60px -20px #000;touch-action:none}
+  #panel{width:292px;flex:none;background:var(--panel);border-left:1px solid var(--line);
+         overflow-y:auto;padding:16px 16px 40px;-webkit-overflow-scrolling:touch}
+  h1{font-size:15px;margin:0 0 2px;letter-spacing:.02em}
+  .sub{color:var(--muted);font-size:12px;margin:0 0 16px}
+  fieldset{border:0;border-top:1px solid var(--line);margin:0 0 14px;padding:12px 0 0}
+  legend{color:var(--muted);font-size:11px;letter-spacing:.12em;text-transform:uppercase;padding:0}
+  label{display:block;margin:0 0 11px}
+  .row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px}
+  .row b{font-weight:500;font-size:12.5px}
+  .row span{color:var(--accent);font-variant-numeric:tabular-nums;font-size:12px}
+  input[type=range]{width:100%;accent-color:var(--accent);height:18px;margin:0}
+  input[type=text]{width:100%;background:#0a0c10;border:1px solid var(--line);color:var(--text);
+    border-radius:5px;padding:6px 8px;font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace}
+  .checks{display:flex;flex-wrap:wrap;gap:10px 14px;margin-bottom:4px}
+  .checks label{display:flex;align-items:center;gap:6px;margin:0;font-size:12.5px}
+  input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;margin:0}
+  .btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+  button{background:#1b202b;border:1px solid var(--line);color:var(--text);border-radius:6px;
+    padding:9px 10px;font:500 12.5px/1 inherit;cursor:pointer;
+    transition:background .16s cubic-bezier(.32,.72,0,1),transform .16s cubic-bezier(.32,.72,0,1)}
+  button:hover{background:#242b39}
+  button:active{transform:scale(.97)}
+  button.wide{grid-column:1/-1}
+  button.primary{background:#17435c;border-color:#1f6d94}
+  button.primary:hover{background:#1b5175}
+  .hint{color:var(--muted);font-size:11.5px;margin:6px 0 0}
+  @media (prefers-reduced-motion:reduce){button{transition:none}}
+  #back{position:fixed;left:14px;top:12px;z-index:6;color:#8b96a8;font-size:12.5px;
+    text-decoration:none;letter-spacing:.04em;padding:4px 2px}
+  #back:hover{color:#e7ecf4}
+  #back:focus-visible{outline:2px solid #5ad1ff;outline-offset:2px}
+  footer{margin-top:22px;padding-top:14px;border-top:1px solid var(--line);
+    display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;
+    color:#8b96a8;font-size:11.5px;font-variant-numeric:tabular-nums}
+  footer b{color:#e7ecf4;font-weight:500}
+  @media (max-width:820px){
+    body{flex-direction:column;overflow:auto}
+    #stage{padding:10px}
+    #panel{width:100%;border-left:0;border-top:1px solid var(--line);overflow:visible}
+  }
+</style>
+</head>
+<body>
+
+<a id="back" href="../">← designshow</a>
+<div id="stage"><canvas id="cv" width="900" height="900"></canvas></div>
+
+<div id="panel">
+  <h1>万华镜生成器</h1>
+  <p class="sub">D<sub>N</sub> 镜像对称 · Droste 递归 · 粒子泼溅</p>
+
+  <div class="btns">
+    <button id="rand" class="primary">随机一张</button>
+    <button id="reroll">换母题</button>
+    <button id="png" class="wide">导出 4K PNG</button>
+  </div>
+  <label style="margin-top:10px">
+    <div class="row"><b>种子</b><span id="seedTxt"></span></div>
+    <input type="text" id="seed" spellcheck="false">
+  </label>
+  <p class="hint">同一串种子 + 同一组参数 = 完全相同的图。调好了就「复制参数」存下来。</p>
+
+  <fieldset><legend>对称与递归</legend><div id="g-sym"></div>
+    <p class="hint" id="nest">&nbsp;</p></fieldset>
+  <fieldset><legend>母题</legend><div id="g-motif"></div></fieldset>
+  <fieldset><legend>颜色</legend><div id="g-color"></div></fieldset>
+  <fieldset><legend>粒子与光</legend><div id="g-dust"></div></fieldset>
+  <fieldset><legend>开关</legend><div class="checks" id="g-flags"></div></fieldset>
+
+  <div class="btns" style="margin-top:14px">
+    <button id="copy">复制参数</button>
+    <button id="paste">读入参数</button>
+  </div>
+  <p class="hint" id="status">&nbsp;</p>
+  <footer>
+    <div>作者：<b>辛海洋</b></div>
+    <div><time datetime="2026-08-15">2026-08-15</time></div>
+  </footer>
+</div>
+
+<script>
+/* ============================================================
+   万华镜生成器
+   五层：0 底 · 1 背景粒子 · 2 万花筒环(Droste) · 3 彗尾 · 4 前景粒子
+   几何全部以 R(半径) 为单位 → 任何画布尺寸构图完全一致，导出即放大。
+   ============================================================ */
+
+/* ---------- 可复现随机 ---------- */
+function hashStr(s){let h=2166136261>>>0;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)>>>0}return h>>>0}
+function mulberry32(a){return function(){a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const RG=r=>(r()+r()+r()-1.5)*0.8;   // 近似高斯，均值 0
+
+/* ---------- 参数表 ---------- */
+const SPEC=[
+  ['sym',   'g-sym',  '对称重数 N',     3,   24,  1,    8,   v=>v],
+  ['depth', 'g-sym',  '递归层数',       1,    9,  1,    5,   v=>v],
+  ['shrink','g-sym',  '每层缩放',    0.30, 0.90, .01, 0.46, v=>v.toFixed(2)],
+  ['twist', 'g-sym',  '每层旋转',       0,   60,  1,   17,   v=>v+'°'],
+
+  ['hollow','g-motif','中空半径',    0.10, 0.70, .01, 0.36, v=>v.toFixed(2)],
+  ['reach', 'g-motif','外缘半径',    0.55, 1.10, .01, 0.90, v=>v.toFixed(2)],
+  ['blades','g-motif','每格叶片数',     1,    5,  1,    2,   v=>v],
+  ['organ', 'g-motif','形状随机度',  0.05, 0.60, .01, 0.26, v=>v.toFixed(2)],
+  ['wings', 'g-motif','外圈长翼',       0,    8,  1,    4,   v=>v],
+  ['shards','g-motif','内圈碎片',       0,   10,  1,    4,   v=>v],
+
+  ['hue0',  'g-color','起始色相',       0,  360,  1,   96,   v=>v+'°'],
+  ['span',  'g-color','环向色相跨度',   0,  360,  1,   70,   v=>v+'°'],
+  ['rim',   'g-color','描边色偏移',     0,  360,  1,  268,   v=>'+'+v+'°'],
+  ['sat',   'g-color','饱和度',        30,  100,  1,   86,   v=>v+'%'],
+  ['dustH', 'g-color','粒子色相',       0,  360,  1,   78,   v=>v+'°'],
+
+  ['dust',  'g-dust', '粒子数量',     300,12000, 100, 6000,  v=>v],
+  ['bands', 'g-dust', '环带数',         0,    6,  1,    3,   v=>v],
+  ['grain', 'g-dust', '粒子大小',     0.4,  3.0, .1,  1.2,   v=>v.toFixed(1)],
+  ['comet', 'g-dust', '彗尾数量',       0,   90,  1,   26,   v=>v],
+  ['glow',  'g-dust', '辉光强度',       0,   30,  1,   13,   v=>v],
+];
+const FLAGS=[['neighbor','邻镜残影',true],['vignette','暗角',true],['filigree','嵌套纹样',true]];
+
+const P={};
+SPEC.forEach(([k,,,,,,d])=>P[k]=d);
+FLAGS.forEach(([k,,d])=>P[k]=d);
+P.seed=Math.random().toString(36).slice(2,9);
+P.motifSeed=Math.random().toString(36).slice(2,9);
+
+/* ---------- UI ---------- */
+const $=id=>document.getElementById(id);
+const readouts={};
+for(const [key,group,label,min,max,step,def,fmt] of SPEC){
+  const l=document.createElement('label');
+  l.innerHTML=`<div class="row"><b>${label}</b><span></span></div>`;
+  const inp=document.createElement('input');
+  inp.type='range';inp.min=min;inp.max=max;inp.step=step;inp.value=def;
+  l.appendChild(inp);$(group).appendChild(l);
+  const out=l.querySelector('span');out.textContent=fmt(def);
+  readouts[key]=[inp,out,fmt];
+  inp.addEventListener('input',()=>{P[key]=parseFloat(inp.value);out.textContent=fmt(P[key]);draw()});
+}
+for(const [key,label,def] of FLAGS){
+  const l=document.createElement('label');
+  const c=document.createElement('input');c.type='checkbox';c.checked=def;
+  l.appendChild(c);l.appendChild(document.createTextNode(label));
+  $('g-flags').appendChild(l);
+  readouts[key]=[c,null,null];
+  c.addEventListener('change',()=>{P[key]=c.checked;draw()});
+}
+function syncUI(){
+  for(const k in readouts){
+    const [inp,out,fmt]=readouts[k];
+    if(inp.type==='checkbox')inp.checked=P[k];
+    else{inp.value=P[k];out.textContent=fmt(P[k])}
+  }
+  $('seed').value=P.seed;$('seedTxt').textContent=P.motifSeed;
+  // 无缝嵌套的临界缩放：外缘缩到中空口时刚好接上
+  const s=P.hollow/P.reach;
+  $('nest').textContent=`无缝嵌套缩放 ≈ ${s.toFixed(2)}`+
+    (P.shrink>s+0.06?'（当前偏大：层与层会叠压）':P.shrink<s-0.06?'（当前偏小：层与层会脱开留黑）':'（当前刚好）');
+}
+
+/* ---------- 母题：一次生成，各层复用 ---------- */
+/* 只画半格 [0, π/N]，镜像后得到整格 → 群是 D_N（有镜面）而不是 C_N（只有旋转） */
+function buildMotif(seedStr,p){
+  const r=mulberry32(hashStr(seedStr));
+  const shapes=[];
+  const wob=()=>1+RG(r)*p.organ;
+  const IN=p.hollow, OUT=p.reach;
+
+  for(let b=0;b<p.blades;b++){
+    const f=p.blades===1?1:b/(p.blades-1);
+    const r0=IN*(0.95+0.35*f);
+    const r1=(IN+(OUT-IN)*(0.62+0.38*(1-f)))*wob();
+    const pts=[],n=7;
+    for(let i=0;i<n;i++){                       // 外轮廓：张开再收回
+      const u=i/(n-1);
+      const t=Math.sin(u*Math.PI)*(0.52+0.46*r())*wob();
+      pts.push({t:Math.min(0.98,t),r:r0+(r1-r0)*u});
+    }
+    for(let i=n-1;i>=0;i--){                    // 回程：贴近镜面 t≈0
+      const u=i/(n-1);
+      pts.push({t:0.02+0.09*Math.sin(u*Math.PI)*r(),r:r0+(r1-r0)*u});
+    }
+    shapes.push({kind:'blade',pts,hue:b*16,r0,r1,rings:2+((r()*3)|0)});
+  }
+
+  for(let w=0;w<p.wings;w++){
+    const t=0.10+0.84*(w+0.5)/p.wings+RG(r)*0.05;
+    shapes.push({kind:'wing',t:Math.min(0.96,Math.max(0.04,t)),
+                 r0:IN+(OUT-IN)*(0.25+0.30*r()),
+                 r1:OUT*(1.04+0.28*r()),
+                 wid:0.14+0.30*r(),hue:150+90*r()});   // wid = 半格角的占比，不是弧度
+  }
+
+  for(let s=0;s<p.shards;s++){
+    shapes.push({kind:'shard',t:0.08+0.84*r(),
+                 r0:IN*(0.26+0.50*r()),
+                 r1:IN*(0.62+0.42*r()),
+                 wid:0.06+0.16*r(),hue:150+70*r()});
+  }
+  return shapes;
+}
+
+/* ---------- 绘制 ---------- */
+const cv=$('cv');
+const polar=(t,rr,A,R)=>{const a=t*A;return{x:Math.cos(a)*rr*R,y:Math.sin(a)*rr*R}};
+
+function spline(ctx,pts,f,cx,cy){
+  const n=pts.length;if(n<3)return;
+  const q=f===1?pts:pts.map(p=>({x:cx+(p.x-cx)*f,y:cy+(p.y-cy)*f}));
+  ctx.beginPath();ctx.moveTo(q[0].x,q[0].y);
+  for(let i=0;i<n;i++){
+    const p0=q[(i-1+n)%n],p1=q[i],p2=q[(i+1)%n],p3=q[(i+2)%n];
+    ctx.bezierCurveTo(p1.x+(p2.x-p0.x)/6,p1.y+(p2.y-p0.y)/6,
+                      p2.x-(p3.x-p1.x)/6,p2.y-(p3.y-p1.y)/6,p2.x,p2.y);
+  }
+  ctx.closePath();
+}
+
+function drawMotif(ctx,shapes,R,A,hue,p,dim){
+  const S=p.sat, L=52*dim;
+  const rimC=`hsl(${(hue+p.rim)%360} 100% ${Math.min(74,58*dim+14)}%)`;
+  for(const sh of shapes){
+    if(sh.kind==='blade'){
+      const h=(hue+sh.hue)%360;
+      const pts=sh.pts.map(q=>polar(q.t,q.r,A,R));
+      let cx=0,cy=0;for(const q of pts){cx+=q.x;cy+=q.y}
+      cx/=pts.length;cy/=pts.length;
+
+      const g=ctx.createRadialGradient(0,0,sh.r0*R,0,0,sh.r1*R);
+      g.addColorStop(0,`hsl(${(h+34)%360} ${S}% ${Math.min(72,L*1.28)}%)`);
+      g.addColorStop(.58,`hsl(${h} ${S}% ${L*0.74}%)`);
+      g.addColorStop(1,`hsl(${(h+338)%360} ${S}% ${L*0.40}%)`);
+      spline(ctx,pts,1);ctx.fillStyle=g;ctx.fill();
+
+      if(p.filigree&&dim>0.55){          // 嵌套等高线：沿花瓣自身轮廓向内收
+        ctx.save();ctx.clip();
+        ctx.lineWidth=Math.max(.5,R*0.0022);
+        for(let k=1;k<=sh.rings;k++){
+          const f=1-k*(0.62/(sh.rings+1));
+          ctx.strokeStyle=`hsla(${(h+44)%360} 100% ${72}% / ${0.30*dim/k})`;
+          spline(ctx,pts,f,cx,cy);ctx.stroke();
+        }
+        ctx.restore();
+      }
+      ctx.save();                        // 对比色描边 —— 整张图辨识度的来源
+      ctx.shadowColor=rimC;ctx.shadowBlur=p.glow;
+      ctx.lineWidth=Math.max(.7,R*0.0055);ctx.strokeStyle=rimC;
+      spline(ctx,pts,1);ctx.stroke();
+      ctx.restore();
+
+    }else{
+      // wing 与 shard 同一种「不对称柳叶」，只是尺度与配色不同
+      const isWing=sh.kind==='wing';
+      const h=(hue+sh.hue)%360, w=sh.wid*A;
+      const a=sh.r0*R, b=sh.r1*R, rm=(a+b)/2, off=Math.sin(w)*rm*1.9;
+      ctx.save();ctx.rotate(sh.t*A);
+      ctx.globalCompositeOperation='lighter';
+      ctx.beginPath();
+      ctx.moveTo(a,0);
+      ctx.quadraticCurveTo(rm,off,b,0);
+      ctx.quadraticCurveTo(rm,-off*0.55,a,0);
+      ctx.closePath();
+      const g=ctx.createLinearGradient(a,0,b,0);
+      if(isWing){
+        g.addColorStop(0,`hsla(${h} 92% ${38*dim}% / ${0.52*dim})`);
+        g.addColorStop(.65,`hsla(${(h+26)%360} 96% ${58*dim}% / ${0.38*dim})`);
+        g.addColorStop(1,`hsla(${(h+48)%360} 100% ${80*dim}% / ${0.06*dim})`);
+      }else{
+        g.addColorStop(0,`hsla(${(h+20)%360} 100% ${52*dim}% / ${0.30*dim})`);
+        g.addColorStop(.5,`hsla(${h} 100% ${74*dim}% / ${0.82*dim})`);
+        g.addColorStop(1,`hsla(${(h+30)%360} 100% ${88*dim}% / ${0.24*dim})`);
+      }
+      ctx.fillStyle=g;ctx.fill();
+      ctx.globalCompositeOperation='source-over';
+      ctx.strokeStyle=`hsla(0 0% 100% / ${(isWing?0.30:0.42)*dim})`;
+      ctx.lineWidth=Math.max(.5,R*(isWing?0.0016:0.0011));ctx.stroke();
+      ctx.restore();
+    }
+  }
+}
+
+function drawRing(ctx,shapes,R,p,dim){
+  const A=Math.PI/p.sym;
+  for(let i=0;i<p.sym;i++){
+    const hue=(p.hue0+p.span*i/p.sym)%360;
+    ctx.save();ctx.rotate(i*2*A);
+    drawMotif(ctx,shapes,R,A,hue,p,dim);
+    ctx.scale(1,-1);                  // ← 镜像。去掉这行就只是「转圈复制」，不是万华镜
+    drawMotif(ctx,shapes,R,A,hue,p,dim);
+    ctx.restore();
+  }
+}
+
+function drawDust(ctx,R,p,rnd,count,scaleMul,alphaMul){
+  ctx.save();ctx.globalCompositeOperation='lighter';
+  const centers=[];
+  for(let b=0;b<p.bands;b++)centers.push(0.42+0.78*(b+0.5)/p.bands);
+  for(let i=0;i<count;i++){
+    let rr;
+    if(centers.length&&rnd()<0.58){
+      rr=centers[(rnd()*centers.length)|0]+RG(rnd)*0.06;
+    }else{
+      rr=0.10+Math.pow(rnd(),0.55)*1.35;
+    }
+    if(rr<0.05||rr>1.6)continue;
+    const a=rnd()*Math.PI*2;
+    // 尺寸重尾分布：绝大多数是细尘，少数是外圈大斑点
+    const sz=R*0.0016*p.grain*scaleMul*(0.30+rr*1.25)*(0.25+Math.pow(rnd(),2.1)*3.4);
+    const h=(p.dustH+RG(rnd)*44+360)%360;
+    ctx.fillStyle=`hsla(${h} 95% ${56+rnd()*36}% / ${(0.30+rnd()*0.62)*alphaMul})`;
+    ctx.save();ctx.translate(Math.cos(a)*rr*R,Math.sin(a)*rr*R);ctx.rotate(rnd()*Math.PI);
+    ctx.beginPath();ctx.ellipse(0,0,sz*(1+rnd()*0.9),sz,0,0,6.2832);ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+/* 彗尾：圆头在外端，尾巴向内收细。落在花外围，不横穿花心。 */
+function drawComets(ctx,R,p,rnd){
+  ctx.save();ctx.globalCompositeOperation='lighter';
+  const tints=[[200,60],[262,52],[46,58],[0,0]];   // 青 / 薰衣草 / 暖金 / 纯白
+  for(let i=0;i<p.comet;i++){
+    const r0=(p.reach*(1.00+rnd()*0.30))*R;
+    const r1=r0+(0.09+Math.pow(rnd(),1.8)*0.42)*R;
+    const w=R*0.0062*(0.45+rnd()*1.6);
+    const [th,ts]=tints[(rnd()*tints.length)|0];
+    ctx.save();ctx.rotate(rnd()*Math.PI*2);
+    ctx.beginPath();
+    ctx.moveTo(r0,0);
+    ctx.quadraticCurveTo((r0+r1)/2,w*0.70,r1,w);
+    ctx.arc(r1,0,w,Math.PI/2,-Math.PI/2,true);
+    ctx.quadraticCurveTo((r0+r1)/2,-w*0.70,r0,0);
+    ctx.closePath();
+    const g=ctx.createLinearGradient(r0,0,r1,0);
+    g.addColorStop(0,`hsla(${th} ${ts}% 88% / 0)`);
+    g.addColorStop(.65,`hsla(${th} ${ts}% 90% / .26)`);
+    g.addColorStop(1,`hsla(${th} ${ts*0.5}% 98% / .90)`);
+    ctx.fillStyle=g;ctx.fill();
+    const hg=ctx.createRadialGradient(r1,0,0,r1,0,w*4.2);
+    hg.addColorStop(0,`hsla(${th} ${ts*0.4}% 99% / .80)`);
+    hg.addColorStop(.32,`hsla(${th} ${ts}% 88% / .30)`);
+    hg.addColorStop(1,`hsla(${th} ${ts}% 80% / 0)`);
+    ctx.fillStyle=hg;
+    ctx.beginPath();ctx.arc(r1,0,w*4.2,0,6.2832);ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function stack(ctx,shapes,R,p,layers,dimBase){
+  for(let k=layers-1;k>=0;k--){        // 由外向内，后画的压在前面
+    ctx.save();
+    ctx.rotate(k*p.twist*Math.PI/180);
+    ctx.scale(Math.pow(p.shrink,k),Math.pow(p.shrink,k));
+    drawRing(ctx,shapes,R,p,Math.max(0.34,dimBase-k*0.09));
+    ctx.restore();
+  }
+}
+
+function compose(ctx,W,shapes,p){
+  const R=W*0.30, c=W/2;
+  ctx.fillStyle='#04060a';ctx.fillRect(0,0,W,W);
+  if(p.vignette){
+    const g=ctx.createRadialGradient(c,c,0,c,c,W*0.72);
+    g.addColorStop(0,`hsla(${p.dustH} 60% 20% / .26)`);
+    g.addColorStop(.55,'hsla(220 60% 8% / .16)');
+    g.addColorStop(1,'rgba(0,0,0,.94)');
+    ctx.fillStyle=g;ctx.fillRect(0,0,W,W);
+  }
+
+  ctx.save();ctx.translate(c,c);
+  drawDust(ctx,R,p,mulberry32(hashStr(p.seed+'|bg')),Math.round(p.dust*0.80),1,1);
+  stack(ctx,shapes,R,p,p.depth,1);
+  drawDust(ctx,R,p,mulberry32(hashStr(p.seed+'|fg')),Math.round(p.dust*0.20),1.6,0.8);
+  drawComets(ctx,R,p,mulberry32(hashStr(p.seed+'|comet')));
+  ctx.restore();
+
+  if(p.neighbor){                       // 镜筒边缘漏进来的相邻格 —— 「这是拍出来的」的关键暗示
+    ctx.save();
+    ctx.globalAlpha=.42;
+    ctx.translate(W*0.012,W*0.004);
+    ctx.scale(.46,.46);ctx.rotate(0.42);
+    stack(ctx,shapes,R,p,Math.min(3,p.depth),0.9);
+    ctx.restore();
+  }
+}
+
+let shapes;
+function draw(){
+  shapes=buildMotif(P.motifSeed,P);
+  compose(cv.getContext('2d'),cv.width,shapes,P);
+  syncUI();
+}
+
+/* ---------- 交互 ---------- */
+$('rand').onclick=()=>{
+  const r=Math.random;
+  P.seed=r().toString(36).slice(2,9);
+  P.motifSeed=r().toString(36).slice(2,9);
+  P.sym=3+((r()*11)|0);
+  P.depth=3+((r()*5)|0);
+  P.hollow=+(0.22+r()*0.28).toFixed(2);
+  P.reach=+(0.78+r()*0.28).toFixed(2);
+  P.shrink=+Math.min(0.9,Math.max(0.3,P.hollow/P.reach+(r()-0.4)*0.10)).toFixed(2);
+  P.twist=(r()*40)|0;
+  P.blades=1+((r()*3)|0);
+  P.wings=(r()*7)|0;
+  P.shards=(r()*9)|0;
+  P.hue0=(r()*360)|0;
+  P.span=r()<.45?(r()*90)|0:(r()*360)|0;
+  P.rim=(r()*360)|0;
+  P.dustH=(r()*360)|0;
+  P.bands=(r()*5)|0;
+  draw();
+};
+$('reroll').onclick=()=>{P.motifSeed=Math.random().toString(36).slice(2,9);draw()};
+$('seed').addEventListener('input',e=>{P.seed=e.target.value;
+  compose(cv.getContext('2d'),cv.width,shapes,P)});
+
+$('png').onclick=()=>{
+  const N=3840,off=document.createElement('canvas');off.width=off.height=N;
+  // 粒子数与形状尺寸都不随分辨率改变（几何以 R 为单位）→ 导出图与预览构图完全一致
+  compose(off.getContext('2d'),N,shapes,P);
+  off.toBlob(b=>{
+    const u=URL.createObjectURL(b),a=document.createElement('a');
+    a.href=u;a.download=`kaleido-${P.seed}-${P.motifSeed}.png`;a.click();
+    setTimeout(()=>URL.revokeObjectURL(u),4000);say('已导出 3840×3840');
+  },'image/png');
+};
+
+function say(t){$('status').textContent=t;setTimeout(()=>{$('status').innerHTML='&nbsp;'},2600)}
+$('copy').onclick=async()=>{
+  const s=JSON.stringify(P);
+  try{await navigator.clipboard.writeText(s);say('参数已复制')}
+  catch(e){$('seed').value=s;say('剪贴板不可用，参数已放进种子框')}
+};
+$('paste').onclick=async()=>{
+  let s='';try{s=await navigator.clipboard.readText()}catch(e){s=$('seed').value}
+  try{Object.assign(P,JSON.parse(s));draw();say('参数已读入')}
+  catch(e){say('不是合法的参数 JSON')}
+};
+
+draw();
+</script>
+</body>
+</html>
