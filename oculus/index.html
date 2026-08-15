@@ -1,0 +1,701 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="A dome seen from directly below, coming apart in jumps.">
+<title>Oculus</title>
+<style>
+  :root{--ink:#0B0B0C;--panel:#111114;--line:#232326;--text:#E9E9E7;--dim:#83868C;--hi:#9CD2FF}
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;overflow:hidden;background:#000}
+  body{font:14px/1.6 "Helvetica Neue",Helvetica,Arial,system-ui,sans-serif;color:var(--text);
+       display:flex;flex-direction:column}
+  #stage{position:relative;flex:1;min-height:0;background:#000;overflow:hidden}
+  #cv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
+  #back{position:absolute;left:16px;top:14px;z-index:6;color:var(--dim);font-size:12.5px;
+        text-decoration:none;letter-spacing:.04em;mix-blend-mode:difference}
+  #back:hover{color:var(--text)}
+  #back:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--hi);outline-offset:2px}
+  #hint{position:absolute;left:16px;bottom:12px;z-index:5;color:var(--dim);font-size:12px;
+        pointer-events:none;transition:opacity .5s cubic-bezier(.32,.72,0,1);mix-blend-mode:difference}
+  #hint.gone{opacity:0}
+  #bar{flex:none;display:flex;align-items:center;gap:12px;padding:10px 16px;
+       background:var(--panel);border-top:1px solid var(--line)}
+  #title{flex:1;min-width:0;font-size:13px;letter-spacing:.22em;text-transform:uppercase;color:var(--dim)}
+  #fps{flex:none;color:var(--dim);font-size:11.5px;font-variant-numeric:tabular-nums}
+  button{background:transparent;border:1px solid var(--line);color:var(--text);border-radius:4px;
+    padding:7px 12px;font:500 12.5px/1 inherit;cursor:pointer;white-space:nowrap;
+    transition:border-color .18s cubic-bezier(.32,.72,0,1),color .18s cubic-bezier(.32,.72,0,1)}
+  button:hover{border-color:var(--hi);color:var(--hi)}
+  button[aria-pressed="true"]{border-color:var(--hi);color:var(--hi)}
+  #panel{position:absolute;top:0;right:0;bottom:0;width:min(290px,86%);background:rgba(17,17,20,.95);
+    backdrop-filter:blur(10px);border-left:1px solid var(--line);padding:18px 18px 30px;
+    overflow-y:auto;transform:translateX(100%);transition:transform .28s cubic-bezier(.32,.72,0,1)}
+  #panel.open{transform:none}
+  #panel h2{font:400 11px/1 inherit;letter-spacing:.18em;text-transform:uppercase;color:var(--dim);margin:0 0 14px}
+  #panel h2+h2{margin-top:20px}
+  label{display:block;margin:0 0 11px}
+  .row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px}
+  .row b{font-weight:500;font-size:12.5px}
+  .row span{color:var(--hi);font-size:12px;font-variant-numeric:tabular-nums}
+  input[type=range]{width:100%;accent-color:var(--hi);height:18px;margin:0;background:transparent}
+  .checks{display:flex;flex-wrap:wrap;gap:9px 14px;margin-bottom:6px}
+  .checks label{display:flex;align-items:center;gap:6px;margin:0;font-size:12.5px}
+  input[type=checkbox]{accent-color:var(--hi);width:15px;height:15px;margin:0}
+  .note{color:var(--dim);font-size:12px;margin:16px 0 0;padding-top:13px;border-top:1px solid var(--line)}
+  .note b{color:var(--text);font-weight:500}
+  .note time{font-variant-numeric:tabular-nums}
+  @media (prefers-reduced-motion:reduce){#panel,#hint,button{transition:none}}
+  @media (max-width:620px){#bar{gap:8px;padding:9px 11px}button{padding:7px 9px;font-size:12px}
+    #title{letter-spacing:.12em;font-size:11.5px}}
+  /* 窄屏下按钮 + 标题 + 帧率挤在一行会互相压字。帧率是调试读数，先让它走。 */
+  #title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  @media (max-width:520px){#fps{display:none}#title{font-size:11px;letter-spacing:.08em}}
+  @media (max-width:400px){#title{display:none}}
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <canvas id="cv"></canvas>
+  <a id="back" href="../">← Tony’s Trials</a>
+  <p id="hint">Drag to aim · scroll to zoom · sound is off until you turn it on</p>
+  <aside id="panel" aria-label="Controls">
+    <h2>Dome</h2><div id="g-d"></div>
+    <h2>Coming apart</h2><div id="g-g"></div>
+    <h2>Sound</h2><div id="g-a"></div>
+    <h2>Toggles</h2><div class="checks" id="g-f"></div>
+    <p class="note">Nothing here spins. Measured on the source, the rotation between frames is a
+      median of zero degrees and the zoom is zero pixels. What reads as movement is a stack of
+      rings that hold dead still and then jump.<br><br>
+      The sound is built in the page, not a recording. It has no beat, because the picture has
+      none: each jump rings a bell, each inversion breathes.<br><br>
+      <b>Tony Xin</b><br><time datetime="2026-08-15">2026-08-15</time></p>
+  </aside>
+</div>
+
+<div id="bar">
+  <button id="play" aria-pressed="false">Pause</button>
+  <button id="reseed">New dome</button>
+  <button id="sound" aria-pressed="false">Sound on</button>
+  <div id="title">Oculus</div>
+  <div id="fps"></div>
+  <button id="toggle" aria-pressed="false" aria-controls="panel">Controls</button>
+</div>
+
+<script>
+/* ============================================================
+   Oculus —— 从正下方看一座穹顶，然后让它一段一段跳开
+
+   实测参考片（1080×1920 / 29.97fps）得到的四条，全都反直觉：
+
+   1. 没有旋转。相邻帧角位移中位数 0°，标准差却有 57–78°——
+      也就是绝大多数帧纹丝不动，少数帧猛跳 ±100° 以上。
+      序列长这样：-146 +0 -94 +177 +0 +0 +33 +0 -164 …
+   2. 没有推拉。相邻帧径向位移中位 0px（置信度 0.93）。
+   3. 那些同心弧不是旋转模糊。既然没有旋转，就不可能是。
+      它是沿圆周方向的涂抹——角向高频能量在 0.22 与 0.63 之间摆动（2.9 倍），
+      片子前段是辐条、后段被抹成弧。
+   4. 色差是径向的，不是左右错位：角向偏移 ≈0，径向偏移随半径增长
+      （r=225 处 0.01px，r=580 处 1.17px），即 R 通道相对 B 通道
+      绕同一个中心放大约 0.2%。
+
+   所以这件东西的动感全部来自**离散跳变**，不是任何连续运动。
+   照着「看起来在转所以让它转」去做，做出来的是另一样东西。
+   ============================================================ */
+
+const SPEC=[
+  ['decks',  'g-d','Rings',          3,  14, 1,   8,  v=>v],
+  ['slats',  'g-d','Slats / ring',  18, 140, 1,  64,  v=>v],
+  ['fill',   'g-d','Slat width',    10,  92, 1,  52,  v=>v+'%'],
+  ['spread', 'g-d','Ring spacing',  10,  70, 1,  34,  v=>v+'%'],
+  ['rIn',    'g-d','Inner radius',  10,  70, 1,  30,  v=>v+'%'],
+  ['sphere', 'g-d','Sphere size',    0,  60, 1,  25,  v=>v+'%'],
+  ['facets', 'g-d','Sphere detail',  1,   3, 1,   2,  v=>['coarse','medium','fine'][v-1]],
+  ['tilt',   'g-d','Sphere tilt',  -60,  60, 1,  26,  v=>v+'°'],
+  ['offY',   'g-d','Centre offset',-40,  40, 1, -20,  v=>v+'%'],
+
+  ['jump',   'g-g','Jump rate',       0, 100, 1,  38,  v=>v?(v*0.028).toFixed(2)+'/s':'held'],
+  ['reach',  'g-g','Jump size',       0, 180, 1, 110,  v=>v+'°'],
+  ['smear',  'g-g','Angular smear',   0, 100, 1,  30,  v=>v+'%'],
+  ['streak', 'g-g','Radial streak',   0, 100, 1,  26,  v=>v+'%'],
+  ['ca',     'g-g','Colour split',    0, 100, 1,  40,  v=>v+'%'],
+  ['flip',   'g-g','Inversion',       0, 100, 1,  34,  v=>v?(v*0.019).toFixed(2)+'/s':'off'],
+  ['expo',   'g-g','Exposure swing',  0, 100, 1,  46,  v=>v+'%'],
+
+  ['vol',    'g-a','Volume',          0, 100, 1,  64,  v=>v+'%'],
+  ['root',   'g-a','Root',           28,  52, 1,  38,  v=>NOTE(v)],
+  ['sub',    'g-a','Depth',           0, 100, 1,  52,  v=>v+'%'],
+  ['pad',    'g-a','Pad',             0, 100, 1,  60,  v=>v+'%'],
+  ['air',    'g-a','Air',             0, 100, 1,  34,  v=>v+'%'],
+  ['bells',  'g-a','Bells on jumps',  0, 100, 1,  62,  v=>v+'%'],
+  ['shim',   'g-a','Shimmer',         0, 100, 1,  40,  v=>v+'%'],
+  ['bright', 'g-a','Brightness',    180,4800,20, 900,  v=>v+' Hz'],
+  ['space',  'g-a','Space',           0, 100, 1,  72,  v=>v+'%'],
+  ['drift',  'g-a','Drift',           1, 100, 1,  30,  v=>v+'%'],
+];
+const FLAGS=[['hoops','Ring edges',true],['ring','Sphere ring',true],['lamp','Light',true],
+             ['padGlow','Pad breathes the light',true]];
+const NAMES=['C','C♯','D','E♭','E','F','F♯','G','A♭','A','B♭','B'];
+const NOTE=m=>NAMES[m%12]+(Math.floor(m/12)-1);
+
+const P={}; SPEC.forEach(([k,,,,,,d])=>P[k]=d); FLAGS.forEach(([k,,d])=>P[k]=d);
+P.seed='oculus';
+
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* 可复现随机 */
+function hashStr(s){let h=2166136261>>>0;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)>>>0}return h>>>0}
+function mulberry32(a){return function(){a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+/* 整数哈希：跳变要「同一步永远给同一个角度」，不能用流式随机 */
+function h2(a,b){let x=(a*374761393+b*668265263)|0;x=(x^(x>>>13))*1274126177|0;return((x^(x>>>16))>>>0)/4294967296}
+
+const $=id=>document.getElementById(id);
+for(const [k,g,label,min,max,step,def,fmt] of SPEC){
+  const l=document.createElement('label');
+  l.innerHTML=`<div class="row"><b>${label}</b><span></span></div>`;
+  const i=document.createElement('input');
+  i.type='range';i.min=min;i.max=max;i.step=step;i.value=def;
+  i.setAttribute('aria-label',label);
+  l.appendChild(i);$(g).appendChild(l);
+  const o=l.querySelector('span');o.textContent=fmt(def);
+  i.addEventListener('input',()=>{P[k]=parseFloat(i.value);o.textContent=fmt(P[k]);
+    if(['decks','slats','spread','rIn','facets'].includes(k))build();
+    });
+}
+for(const [k,label,def] of FLAGS){
+  const l=document.createElement('label');const c=document.createElement('input');
+  c.type='checkbox';c.checked=def;l.appendChild(c);l.appendChild(document.createTextNode(label));
+  $('g-f').appendChild(l);c.addEventListener('change',()=>P[k]=c.checked);
+}
+
+/* ============================================================
+   结构：一圈圈的板条 + 中央一颗测地球
+   所有尺寸按 R（画面短边的一半）计，不写死像素——换分辨率构图必须一样。
+   ============================================================ */
+let decks=[], sphereEdges=[];
+
+function build(){
+  const r=mulberry32(hashStr(P.seed));
+  decks=[];
+  let rad=P.rIn/100;
+  for(let i=0;i<P.decks;i++){
+    const w=(P.spread/100)*(0.55+r()*0.9);         // 每圈厚度不等，等宽会像标靶
+    // 越往外越密、越暗：这是「穹顶在弯着离开你」的全部来源。
+    // 让密度和亮度都跟半径走，画面才有球面感而不是平面标靶。
+    const depth=Math.min(1,rad/1.35);
+    const n=Math.max(6,Math.round(P.slats*(0.55+r()*0.95)*(1+depth*1.5)));
+    decks.push({
+      r0:rad, r1:rad+w, n,
+      phase:r()*Math.PI*2,
+      lum:(0.90+r()*0.10)*(1-depth*0.20),
+      hoop:r()<0.72,
+      hoopW:0.006+r()*0.014,
+      jitter:r(),                                   // 这一圈的跳变时钟相位
+      slat:Array.from({length:n},()=>0.80+r()*0.20), // 每根板条自己的亮度
+      notch:Array.from({length:n},()=>0.86+r()*0.14), // 外缘参差：参考片的弧是带锯齿的
+      bucket:[],
+      arc:r()<0.42?(0.34+r()*0.44):1,               // 有些圈只走一段弧，不封口
+      arcAt:r()*Math.PI*2,
+      voiced:r()<0.36                               // 只有一部分环发声。八个环全响就成了密集打点，不是神秘
+    });
+    const dk=decks[decks.length-1];
+    dk.bucket=dk.slat.map(v=>Math.min(BK-1,Math.floor((v-0.80)/0.20*BK)));
+    rad+=w*(1.02+r()*0.30);
+  }
+  buildSphere();
+}
+
+/* 测地球：正二十面体细分后取棱。用真三维顶点，投影时才有前后。 */
+function buildSphere(){
+  const t=(1+Math.sqrt(5))/2;
+  let V=[[-1,t,0],[1,t,0],[-1,-t,0],[1,-t,0],[0,-1,t],[0,1,t],[0,-1,-t],[0,1,-t],
+         [t,0,-1],[t,0,1],[-t,0,-1],[-t,0,1]].map(v=>{
+    const L=Math.hypot(...v); return v.map(c=>c/L);});
+  let F=[[0,11,5],[0,5,1],[0,1,7],[0,7,10],[0,10,11],[1,5,9],[5,11,4],[11,10,2],[10,7,6],[7,1,8],
+         [3,9,4],[3,4,2],[3,2,6],[3,6,8],[3,8,9],[4,9,5],[2,4,11],[6,2,10],[8,6,7],[9,8,1]];
+  for(let s=0;s<P.facets;s++){
+    const mid=new Map(), NF=[];
+    const key=(a,b)=>a<b?a+'_'+b:b+'_'+a;
+    const getMid=(a,b)=>{
+      const k=key(a,b); if(mid.has(k))return mid.get(k);
+      const m=[0,1,2].map(i=>(V[a][i]+V[b][i])/2); const L=Math.hypot(...m);
+      V.push(m.map(c=>c/L)); mid.set(k,V.length-1); return V.length-1;
+    };
+    for(const [a,b,c] of F){
+      const ab=getMid(a,b), bc=getMid(b,c), ca=getMid(c,a);
+      NF.push([a,ab,ca],[b,bc,ab],[c,ca,bc],[ab,bc,ca]);
+    }
+    F=NF;
+  }
+  const seen=new Set(); sphereEdges=[];
+  for(const f of F) for(let i=0;i<3;i++){
+    const a=f[i],b=f[(i+1)%3], k=a<b?a+'_'+b:b+'_'+a;
+    if(seen.has(k))continue; seen.add(k);
+    sphereEdges.push([V[a],V[b]]);
+  }
+}
+
+/* ============================================================
+   跳变：保持不动 → 猛跳一次 → 再保持
+   同一步必须永远给同一个角度，所以用整数哈希而不是流式随机。
+   ============================================================ */
+function deckAngle(i,t){
+  if(reduce||P.jump<=0) return 0;
+  const rate=P.jump*0.028;                       // 每秒期望跳变次数
+  const s=Math.floor(t*rate+decks[i].jitter*7);
+  return (h2(i+13,s)-0.5)*2*P.reach*Math.PI/180;
+}
+let flipStep=-1, toneFlip=0, expoNow=1;
+function tone(t){
+  // 明暗是跳的不是渐变的：实测 74 帧里 21 帧跳幅 >0.04
+  // 整屏亮度翻转超过每秒三次是光敏性风险，不是审美问题。
+  // 滑杆本身最高只到 1.9 次/秒；这道钳是防以后有人调大滑杆范围时静默越线。
+  const rate=Math.min(2.4,P.flip*0.019);
+  const s=rate>0?Math.floor(t*rate):0;
+  if(s!==flipStep){
+    flipStep=s;
+    toneFlip=(rate>0&&!reduce)?(h2(97,s)<0.42?1:0):0;
+    expoNow=1+(P.expo/100)*0.62*(h2(211,s)-0.62);
+    if(rate>0&&!reduce) flipEvent();
+  }
+  return {inv:toneFlip,ex:expoNow};
+}
+
+/* ---------- 画布 ---------- */
+const cv=$('cv'),ctx=cv.getContext('2d');
+const sc=document.createElement('canvas'), sctx=sc.getContext('2d');   // 场景
+const tp=document.createElement('canvas'), tctx=tp.getContext('2d');   // 通道着色暂存
+let W=0,H=0,DPR=1;
+/* 内部渲染尺度 qual：色差要三次整屏合成，一帧总共约十来次整屏填充。
+   在没有 GPU 合成的机器上这就是瓶颈——实测帧率随视口面积走，不随板条数量走
+   （板条从逐根 fill 改成分桶合并，帧率纹丝不动，才定位到是填充率）。
+   所以按实测帧率降内部分辨率，而不是砍构图。cv 始终是全分辨率，只有 sc/tp 缩。 */
+let qual=1;
+function resize(){
+  DPR=Math.min(2,devicePixelRatio||1);
+  W=cv.clientWidth;H=cv.clientHeight;
+  // 三块画布一起降。只降 sc/tp、把 cv 留在全分辨率是错的：
+  // 那样每个通道合成时还要把小图采样放大到全屏，省下的又赔回去了。
+  // 画布元素本身由 CSS 撑满，最后那一次放大交给浏览器合成器，比我们自己采样便宜。
+  const q=Math.max(1,Math.round(W*DPR*qual)), qh=Math.max(1,Math.round(H*DPR*qual));
+  for(const c of [cv,sc,tp]){c.width=q;c.height=qh}
+}
+addEventListener('resize',resize);
+
+const view={zoom:1,ax:0,ay:0,tgx:0,tgy:0};
+let paused=false;
+
+/* ---------- 场景 ---------- */
+function drawScene(g,t,R,cx,cy){
+  g.setTransform(1,0,0,1,0,0);
+  g.fillStyle='#000'; g.fillRect(0,0,sc.width,sc.height);
+  g.translate(cx,cy);
+  for(let i=0;i<decks.length;i++){
+    const d=decks[i];
+    drawDeck(g,d,d.phase+deckAngle(i,t),R,i,t);
+  }
+  if(P.sphere>0) drawSphere(g,t,R);
+}
+
+/* 角向涂抹：把板条沿圆周**拉宽**，不是把整圈重画几十遍。
+   重画会把环与环之间的黑位一起抬亮，参考片里那些黑位是纯黑的。
+   拉宽则让辐条 → 锯齿弧 → 实心弧，环的边界始终不动。
+   （第一版就是重画多遍，画面灰成一片，这一条是改出来的。）
+
+   性能：板条按亮度分成 BK 桶，一桶一条路径一次 fill。
+   逐根 fill 的版本在 900×1400 上只有 20fps——1295 次 fill 加 1295 个渐变对象。 */
+const BK=5;
+/* 参考片里不少环是断的，只走一段弧。全都画满整圈会规整得像标靶。 */
+function inArc(d,j){
+  if(d.arc>=1) return true;
+  const f=((j/d.n+d.arcAt/6.2832)%1+1)%1;
+  return f<d.arc;
+}
+function drawDeck(g,d,a,R,idx,t){
+  const r0=d.r0*R, r1=d.r1*R, step=Math.PI*2/d.n;
+  const sm=P.smear/100;
+  const w=step*(P.fill/100*(1-sm)+0.995*sm);
+  for(let k=0;k<BK;k++){
+    let started=false;
+    g.beginPath();
+    for(let j=0;j<d.n;j++){
+      if(d.bucket[j]!==k) continue;
+      if(!inArc(d,j)) continue;
+      const th=a+j*step;
+      const re=r0+(r1-r0)*d.notch[j];        // 每根长短不一 → 弧的外缘是锯齿的
+      g.moveTo(Math.cos(th-w/2)*re,Math.sin(th-w/2)*re);
+      g.arc(0,0,re,th-w/2,th+w/2);
+      g.arc(0,0,r0,th+w/2,th-w/2,true);
+      g.closePath(); started=true;
+    }
+    if(!started) continue;
+    const v=d.lum*(0.80+0.20*(k+0.5)/BK);
+    const c=Math.min(255,(v*268)|0);
+    g.fillStyle=`rgb(${c},${c},${c})`;
+    g.fill();
+  }
+
+  /* 径向拖尾：只有一部分板条抽出长尾，不是整屏糊一层。
+     参考片里那种白色射线是局部的，整屏径向模糊会把对比度全吃掉。
+
+     整圈只建一个**径向**渐变、只 fill 一次。
+     上一版是每根一次 setTransform+rotate+fillRect：实测关掉拖尾帧率从 20 跳到 36，
+     它和色差是仅有的两个真花钱的地方。渐变本来就该是径向的——衰减是沿半径发生的。 */
+  const st=P.streak/100;
+  if(st>0.02){
+    // 分三段实色，不用渐变。软件光栅下大面积渐变填充是逐像素求值，很贵：
+    // 实测关掉拖尾帧率 35→54，换成三段实色后代价基本消失。
+    // 三段和连续渐变在这种细长尾巴上肉眼分不出来。
+    const SEG=3, len=(r1-r0)*(1.2+st*7.5), hwF=w*0.5*0.55;
+    for(let k=0;k<SEG;k++){
+      const f0=k/SEG, f1=(k+1)/SEG;
+      g.fillStyle=`rgba(255,255,255,${(0.55*st+0.18)*(1-f0)*(1-f0)})`;
+      g.beginPath();
+      for(let j=0;j<d.n;j++){
+        if(d.slat[j]<=0.98-st*0.42||!inArc(d,j)) continue;
+        const th=a+j*step, re=r0+(r1-r0)*d.notch[j];
+        const ra=re+len*f0, rb=re+len*f1;
+        const c0=Math.cos(th-hwF),s0=Math.sin(th-hwF),c1=Math.cos(th+hwF),s1=Math.sin(th+hwF);
+        g.moveTo(c0*ra,s0*ra); g.lineTo(c1*ra,s1*ra);
+        g.lineTo(c1*rb,s1*rb); g.lineTo(c0*rb,s0*rb); g.closePath();
+      }
+      g.fill();
+    }
+  }
+
+  if(P.hoops&&d.hoop){
+    g.strokeStyle='rgba(255,255,255,.62)';
+    g.lineWidth=Math.max(1,d.hoopW*R);
+    g.beginPath();
+    if(d.arc>=1) g.arc(0,0,r1,0,6.2832);
+    else g.arc(0,0,r1,d.arcAt,d.arcAt+d.arc*6.2832);
+    g.stroke();
+  }
+}
+
+function drawSphere(g,t,R){
+  const rr=P.sphere/100*R;
+  const tilt=P.tilt*Math.PI/180, ct=Math.cos(tilt), st=Math.sin(tilt);
+  const spin=reduce?0:t*0.055;                    // 参考片没有旋转，这里只给极慢的一点
+  const cs=Math.cos(spin), ss=Math.sin(spin);
+  const proj=v=>{
+    let [x,y,z]=v;
+    let X=x*cs+z*ss, Z=-x*ss+z*cs;                // 绕 y
+    let Y=y*ct-Z*st;  Z=y*st+Z*ct;                // 绕 x
+    return [X*rr,Y*rr,Z];
+  };
+  // 环：先画后半，再画球，最后画前半——遮挡关系全靠这个顺序
+  const ringPts=[];
+  if(P.ring){
+    for(let k=0;k<=180;k++){
+      const a=k/180*Math.PI*2;
+      ringPts.push(proj([Math.cos(a)*1.28,0,Math.sin(a)*1.28]));
+    }
+    strokeRing(g,ringPts,false,rr);
+  }
+  for(const [A,B] of sphereEdges){
+    const a=proj(A), b=proj(B);
+    const zm=(a[2]+b[2])/2;
+    const front=zm>0;
+    g.strokeStyle=front?`rgba(255,255,255,${0.30+0.55*zm})`:`rgba(255,255,255,${0.10+0.10*(1+zm)})`;
+    g.lineWidth=Math.max(0.6,rr*(front?0.016:0.010));
+    g.beginPath(); g.moveTo(a[0],a[1]); g.lineTo(b[0],b[1]); g.stroke();
+  }
+  if(P.ring) strokeRing(g,ringPts,true,rr);
+  if(P.lamp){
+    const lr=rr*0.38*(1+glowNow*0.20);
+    const lx=-rr*0.10, ly=rr*0.04;
+    g.fillStyle='#fff'; g.beginPath(); g.arc(lx,ly,lr,0,6.2832); g.fill();
+  }
+}
+function strokeRing(g,pts,front,rr){
+  g.strokeStyle=front?'rgba(255,255,255,.92)':'rgba(255,255,255,.34)';
+  g.lineWidth=Math.max(1.4,rr*0.075);
+  g.lineCap='butt';
+  g.beginPath(); let open=false;
+  for(const p of pts){
+    if((p[2]>0)===front){ if(!open){g.moveTo(p[0],p[1]);open=true} else g.lineTo(p[0],p[1]); }
+    else open=false;
+  }
+  g.stroke();
+}
+
+/* ============================================================
+   合成：径向拖尾 → 径向色差 → 明暗
+   色差必须是「绕中心缩放」，不是左右平移。实测角向偏移为 0。
+   ============================================================ */
+function composite(t,R,cx,cy){
+  const T=tone(t);
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.globalCompositeOperation='source-over';
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,cv.width,cv.height);
+
+  const caPx=P.ca/100*R*0.011;              // 实测 r=580px 处约 1.17px，约 0.2%
+  if(P.ca>0.5){
+    // 红 / 青二分，不是三通道各走各的。
+    // 实测参考片：G−B 只有 −0.06 与 −0.27px（等于没分开），R−G 却有 +0.70 与 +1.65px。
+    // 也就是绿和蓝绑在一起、红单独跑。少一遍整屏合成，而且更贴参考。
+    // 两份相加必须正好等于原图，所以各画一次、alpha 一律 1——多画一遍整体就发灰。
+    ctx.globalCompositeOperation='lighter';
+    for(const [col,d] of [['#f00',caPx*0.5],['#0ff',-caPx*0.5]]){
+      // 不需要 clearRect：sc 是不透明的，source-over 画上去就是整幅覆盖。
+      // 每帧省下三次整屏清屏。
+      tctx.setTransform(1,0,0,1,0,0);
+      tctx.globalCompositeOperation='source-over';
+      tctx.drawImage(sc,0,0);
+      tctx.globalCompositeOperation='multiply';
+      tctx.fillStyle=col; tctx.fillRect(0,0,tp.width,tp.height);
+      const k=1+d/R;
+      ctx.globalAlpha=T.ex;
+      ctx.setTransform(k,0,0,k,cx-cx*k,cy-cy*k);
+      ctx.drawImage(tp,0,0);
+    }
+  }else{
+    ctx.globalAlpha=T.ex;
+    ctx.drawImage(sc,0,0);
+  }
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.globalAlpha=1;
+  ctx.globalCompositeOperation='source-over';
+  if(T.inv){                                 // 反相：与白做差
+    ctx.globalCompositeOperation='difference';
+    ctx.fillStyle='#fff'; ctx.fillRect(0,0,cv.width,cv.height);
+    ctx.globalCompositeOperation='source-over';
+  }
+}
+
+/* ============================================================
+   声音：太空神秘。没有节拍——因为画面也没有。
+
+   上一件作品（Armature）是拍子驱动：有速度、有律动，声音踩着时钟走。
+   这件不行。实测这段影像的运动是「不动，不动，猛跳一下」，
+   给它配 4/4 只会让画面看起来像在数拍子。
+
+   所以这里的架构是**事件驱动**：跳变响一声，反相吸一口气，其余时间只有铺底。
+   同步不是对齐节拍，是对齐事件。
+
+   音阶用全音阶 [0,2,4,6,8,10]：没有半音就没有导音，任何两个音都不构成解决关系，
+   耳朵找不到主音。「悬着的」这个感觉是这么来的，不是靠加混响。
+   ============================================================ */
+const A={ctx:null,on:false,t0:0,lastBell:0,sweepUntil:0};
+const WHOLE=[0,2,4,6,8,10];
+const mtof=m=>440*Math.pow(2,(m-69)/12);
+let glowNow=0;
+
+function audioInit(){
+  const C=window.AudioContext||window.webkitAudioContext; if(!C)return false;
+  const ctx=new C(); A.ctx=ctx;
+
+  A.master=ctx.createGain(); A.master.gain.value=0; A.master.connect(ctx.destination);
+
+  // 混响：合成一条脉冲响应（噪声 × 指数衰减）喂给 convolver。
+  // 比延时线像空间得多，而且照样是零外部请求——IR 是算出来的，不是下载的。
+  const dur=4.2, sr=ctx.sampleRate;
+  const ir=ctx.createBuffer(2,Math.floor(sr*dur),sr);
+  for(let ch=0;ch<2;ch++){
+    const d=ir.getChannelData(ch);
+    for(let i=0;i<d.length;i++){
+      const x=i/d.length;
+      d[i]=(Math.random()*2-1)*Math.pow(1-x,2.6)*(1-Math.exp(-i/(sr*0.02)));
+    }
+  }
+  A.rev=ctx.createConvolver(); A.rev.buffer=ir;
+  A.wet=ctx.createGain(); A.wet.gain.value=0.7;
+  A.wet.connect(A.rev); A.rev.connect(A.master);
+
+  A.lp=ctx.createBiquadFilter(); A.lp.type='lowpass';
+  A.lp.frequency.value=P.bright; A.lp.Q.value=0.6;
+  A.lp.connect(A.master); A.lp.connect(A.wet);
+
+  // 低频：一根正弦，安静地垫在最底下
+  A.subG=ctx.createGain(); A.subG.gain.value=0; A.subG.connect(A.master);
+  A.subO=ctx.createOscillator(); A.subO.type='sine';
+  A.subO.connect(A.subG); A.subO.start();
+
+  // 铺底：全音阶上的五个音，各自挂一个互质的慢 LFO，所以永远不重复
+  A.padG=ctx.createGain(); A.padG.gain.value=0; A.padG.connect(A.lp);
+  A.pad=[0,2,6,10,14].map((semi,i)=>{
+    const o=ctx.createOscillator(); o.type=i%2?'triangle':'sawtooth';
+    o.detune.value=(i-2)*4.5;
+    const g=ctx.createGain(); g.gain.value=0.0001;
+    o.connect(g); g.connect(A.padG); o.start();
+    const l=ctx.createOscillator(); l.frequency.value=[0.037,0.053,0.071,0.029,0.043][i];
+    const lg=ctx.createGain(); lg.gain.value=0.5;
+    const off=ctx.createConstantSource(); off.offset.value=0.5; off.start();
+    l.connect(lg); lg.connect(g.gain); off.connect(g.gain); l.start();
+    return {o,g,semi,l};
+  });
+
+  // 气：带通噪声，缓慢扫动
+  const nb=ctx.createBuffer(1,sr*3,sr), nd=nb.getChannelData(0);
+  for(let i=0;i<nd.length;i++) nd[i]=(Math.random()*2-1)*0.5;
+  const ns=ctx.createBufferSource(); ns.buffer=nb; ns.loop=true;
+  A.airF=ctx.createBiquadFilter(); A.airF.type='bandpass';
+  A.airF.frequency.value=1200; A.airF.Q.value=1.4;
+  A.airG=ctx.createGain(); A.airG.gain.value=0;
+  ns.connect(A.airF); A.airF.connect(A.airG); A.airG.connect(A.lp); ns.start();
+  const al=ctx.createOscillator(); al.frequency.value=0.019;
+  const alg=ctx.createGain(); alg.gain.value=700;
+  al.connect(alg); alg.connect(A.airF.frequency); al.start();
+
+  A.t0=ctx.currentTime;
+  return true;
+}
+
+/* 钟：两个正弦做简单调频，起振快、尾巴长，全部送进混响 */
+let bellCount=0, flipCount=0;
+function bell(freq,gain,dur){
+  const ctx=A.ctx; if(!ctx)return;
+  bellCount++;
+  const car=ctx.createOscillator(); car.type='sine'; car.frequency.value=freq;
+  const mod=ctx.createOscillator(); mod.type='sine'; mod.frequency.value=freq*2.76; // 非整数倍＝金属感
+  const mg=ctx.createGain(); mg.gain.setValueAtTime(freq*1.9,ctx.currentTime);
+  mg.gain.exponentialRampToValueAtTime(freq*0.04,ctx.currentTime+dur*0.5);
+  mod.connect(mg); mg.connect(car.frequency);
+  const g=ctx.createGain();
+  const t=ctx.currentTime;
+  g.gain.setValueAtTime(0,t);
+  g.gain.linearRampToValueAtTime(gain,t+0.006);           // 6ms 起振，直接跳会爆音
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  car.connect(g); g.connect(A.lp); g.connect(A.wet);
+  car.start(t); mod.start(t); car.stop(t+dur+0.05); mod.stop(t+dur+0.05);
+}
+
+/* 画面事件 → 声音。这是「同步」在这件作品里唯一发生的地方。 */
+function jumpEvent(deckIdx){
+  if(!A.on||!A.ctx||P.bells<=0)return;
+  if(!decks[deckIdx]||!decks[deckIdx].voiced)return;
+  const now=A.ctx.currentTime;
+  // 最小间隔 0.42s。第一版只挡了 0.06s，实测 2.5 秒响了 21 声——
+  // 那是密集打点，不是神秘。留白本身就是这件作品的声音。
+  if(now-A.lastBell<0.42)return;
+  A.lastBell=now;
+  const deg=WHOLE[(deckIdx*2+3)%WHOLE.length];
+  const oct=12*(3-Math.min(2,Math.floor(deckIdx/3)));     // 外圈低、内圈高
+  bell(mtof(P.root+deg+oct),0.20*P.bells/100,2.2+Math.random()*1.6);
+  if(P.shim>0&&Math.random()<0.34)
+    bell(mtof(P.root+deg+oct+24),0.05*P.shim/100,3.4);
+}
+function flipEvent(){
+  flipCount++;
+  if(!A.on||!A.ctx)return;
+  const ctx=A.ctx,t=ctx.currentTime;
+  // 反相＝吸一口气：滤波猛开再收回
+  A.lp.frequency.cancelScheduledValues(t);
+  A.lp.frequency.setValueAtTime(A.lp.frequency.value,t);
+  A.lp.frequency.linearRampToValueAtTime(Math.min(9000,P.bright*3.4),t+0.10);
+  A.lp.frequency.exponentialRampToValueAtTime(Math.max(120,P.bright),t+1.5);
+  A.sweepUntil=t+1.55;
+  A.airG.gain.cancelScheduledValues(t);
+  A.airG.gain.setValueAtTime(A.airG.gain.value,t);
+  A.airG.gain.linearRampToValueAtTime(P.air/100*0.075,t+0.12);
+  A.airG.gain.exponentialRampToValueAtTime(Math.max(0.0001,P.air/100*0.016),t+2.0);
+}
+
+function audioSync(){
+  if(!A.on||!A.ctx)return;
+  const ctx=A.ctx,t=ctx.currentTime,K=(x,v,tc)=>x.setTargetAtTime(v,t,tc);
+  K(A.master.gain,P.vol/100*0.5,0.12);
+  K(A.subG.gain,P.sub/100*0.16,0.3);
+  A.subO.frequency.setTargetAtTime(mtof(P.root-24),t,0.4);
+  K(A.padG.gain,P.pad/100*0.075,0.35);
+  K(A.airG.gain,P.air/100*0.020,0.6);
+  K(A.wet.gain,P.space/100*0.95,0.3);
+  // 反相事件正在扫滤波时不要抢方向盘，扫完再接管。
+  // 第一版这里根本没写 lp.frequency：Brightness 滑杆挂着、值也传到了 P.bright，
+  // 但除了反相那一下之外没有任何声音变化——「配置对了」不等于「行为对了」。
+  if(t>=A.sweepUntil) K(A.lp.frequency,P.bright,0.15);
+  const f=mtof(P.root);
+  A.pad.forEach(p=>{
+    p.o.frequency.setTargetAtTime(f*Math.pow(2,p.semi/12),t,0.5);
+    p.l.frequency.setTargetAtTime(p.l.frequency.value>0?
+      (0.012+P.drift/100*0.10)*(1+p.semi*0.07):0.03,t,1.0);
+  });
+  // 声音 → 画面：铺底的慢起伏让中央那盏灯跟着呼吸。单向，不构成回路。
+  glowNow=P.padGlow?0.5+0.5*Math.sin((t-A.t0)*0.19):0;
+}
+
+async function soundToggle(){
+  const b=$('sound');
+  if(!A.on){
+    if(!A.ctx&&!audioInit()){b.textContent='No audio';b.disabled=true;return}
+    await A.ctx.resume();
+    A.on=true; b.textContent='Sound off'; b.setAttribute('aria-pressed','true');
+  }else{
+    A.on=false;
+    A.master.gain.setTargetAtTime(0,A.ctx.currentTime,0.08);
+    glowNow=0;
+    b.textContent='Sound on'; b.setAttribute('aria-pressed','false');
+  }
+}
+
+/* ---------- 主循环 ---------- */
+let last=performance.now(),acc=0,frames=0,T=0;
+const lastStep=[];
+function tick(now){
+  const dt=Math.min(0.05,(now-last)/1000); last=now;
+  if(!paused){
+    T+=dt;
+    audioSync();
+    view.ax+=(view.tgx-view.ax)*Math.min(1,dt*4);
+    view.ay+=(view.tgy-view.ay)*Math.min(1,dt*4);
+
+    const R=Math.min(sc.width,sc.height)*0.5*view.zoom;
+    const cx=sc.width*0.5+view.ax*R, cy=sc.height*0.5+P.offY/100*R+view.ay*R;
+
+    // 跳变检测：哪一圈换了步号，就发一次事件
+    for(let i=0;i<decks.length;i++){
+      const rate=P.jump*0.028;
+      const s=rate>0?Math.floor(T*rate+decks[i].jitter*7):0;
+      if(lastStep[i]===undefined){lastStep[i]=s;continue}
+      if(s!==lastStep[i]){lastStep[i]=s; if(!reduce) jumpEvent(i);}
+    }
+
+    drawScene(sctx,T,R,cx,cy);
+    composite(T,R,cx,cy);
+  }
+  frames++; acc+=dt;
+  if(acc>0.5){
+    const f=Math.round(frames/acc);
+    $('fps').textContent=f+' fps · '+decks.reduce((a,d)=>a+d.n,0)+' slats';
+    if(!paused){
+      if(f<26&&qual>0.56){qual=Math.max(0.55,qual-0.15);resize()}
+      else if(f>52&&qual<1){qual=Math.min(1,qual+0.10);resize()}
+    }
+    frames=0;acc=0}
+  requestAnimationFrame(tick);
+}
+
+/* ---------- 交互 ---------- */
+let drag=false,px=0,py=0;
+cv.addEventListener('pointerdown',e=>{drag=true;px=e.clientX;py=e.clientY;cv.setPointerCapture(e.pointerId);$('hint').classList.add('gone')});
+cv.addEventListener('pointermove',e=>{
+  if(!drag)return;
+  view.tgx=Math.max(-.7,Math.min(.7,view.tgx+(e.clientX-px)/cv.clientWidth*1.4));
+  view.tgy=Math.max(-.7,Math.min(.7,view.tgy+(e.clientY-py)/cv.clientHeight*1.4));
+  px=e.clientX;py=e.clientY;
+});
+addEventListener('pointerup',()=>drag=false);
+cv.addEventListener('wheel',e=>{e.preventDefault();
+  view.zoom=Math.max(0.35,Math.min(3.2,view.zoom*(e.deltaY>0?0.94:1.064)));
+  $('hint').classList.add('gone');},{passive:false});
+
+$('play').addEventListener('click',()=>{paused=!paused;
+  $('play').textContent=paused?'Play':'Pause';$('play').setAttribute('aria-pressed',paused);last=performance.now()});
+$('reseed').addEventListener('click',()=>{P.seed='oculus-'+Math.floor(Math.random()*1e9);build();lastStep.length=0});
+$('sound').addEventListener('click',soundToggle);
+$('toggle').addEventListener('click',()=>{const o=$('panel').classList.toggle('open');
+  $('toggle').setAttribute('aria-pressed',o)});
+addEventListener('keydown',e=>{
+  if(e.key===' '){e.preventDefault();$('play').click()}
+  if(e.key==='Escape'&&$('panel').classList.contains('open'))$('toggle').click();
+});
+
+resize(); build();
+if(reduce) $('hint').textContent='Reduced motion is on: the jumps and the inversions are held still. Every control still works.';
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>
