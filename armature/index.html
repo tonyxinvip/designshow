@@ -56,13 +56,16 @@
 <div id="stage">
   <canvas id="cv"></canvas>
   <a id="back" href="../">← Tony’s Trials</a>
-  <p id="hint">Drag to steer · scroll to change speed</p>
+  <p id="hint">Drag to steer · scroll to change speed · sound is off until you turn it on</p>
   <aside id="panel" aria-label="Controls">
     <h2>Structure</h2><div id="g-s"></div>
     <h2>Camera &amp; light</h2><div id="g-c"></div>
+    <h2>Sound</h2><div id="g-a"></div>
     <h2>Toggles</h2><div class="checks" id="g-f"></div>
     <p class="note">Rods and joints sit at real depths, so near ones sweep past while the far
       ones barely move. That difference is the whole effect.<br><br>
+      The sound is synthesised in the page, not a recording. One clock runs both: a beat nudges
+      the travel forward, and every ring that passes the camera rings a note.<br><br>
       <b>Tony Xin</b><br><time datetime="2026-08-15">2026-08-15</time></p>
   </aside>
 </div>
@@ -71,6 +74,7 @@
   <button id="play" aria-pressed="false">Pause</button>
   <button id="reset">Recentre</button>
   <button id="reseed">New lattice</button>
+  <button id="sound" aria-pressed="false">Sound on</button>
   <div id="title">Armature</div>
   <div id="fps"></div>
   <button id="toggle" aria-pressed="false" aria-controls="panel">Controls</button>
@@ -104,8 +108,21 @@ const SPEC=[
   ['thick',  'g-c','Rod thickness',.30,3.00,.05,0.72, v=>v.toFixed(2)],
   ['lampR',  'g-c','Lamp size',      0, 100, 1,  46,  v=>v+'%'],
   ['keyDir', 'g-c','Light angle',    0, 360, 1, 214,  v=>v+'°'],
+
+  ['vol',    'g-a','Volume',         0, 100, 1,  62,  v=>v+'%'],
+  ['bpm',    'g-a','Tempo',         40, 132, 1,  68,  v=>v+' bpm'],
+  ['root',   'g-a','Root',          36,  60, 1,  50,  v=>NOTE(v)],
+  ['drone',  'g-a','Drone',          0, 100, 1,  58,  v=>v+'%'],
+  ['pulse',  'g-a','Pulse',          0, 100, 1,  46,  v=>v+'%'],
+  ['arp',    'g-a','Arpeggio',       0, 100, 1,  40,  v=>v+'%'],
+  ['blip',   'g-a','Ring blips',     0, 100, 1,  55,  v=>v+'%'],
+  ['bright', 'g-a','Brightness',    200,6000,50,1500, v=>v+' Hz'],
+  ['space',  'g-a','Space',          0,  92, 1,  62,  v=>v+'%'],
 ];
-const FLAGS=[['joints','Ball joints',true],['lamp','Centre lamp',true],['fog','Depth falloff',true]];
+const FLAGS=[['joints','Ball joints',true],['lamp','Centre lamp',true],['fog','Depth falloff',true],
+             ['beatMove','Beat drives motion',true]];
+const NAMES=['C','C♯','D','E♭','E','F','F♯','G','A♭','A','B♭','B'];
+const NOTE=m=>NAMES[m%12]+(Math.floor(m/12)-1);
 
 const P={}; SPEC.forEach(([k,,,,,,d])=>P[k]=d); FLAGS.forEach(([k,,d])=>P[k]=d);
 P.seed='armature';
@@ -287,14 +304,174 @@ function render(g,w,h,dpr,p,cm){
   return vis.length;
 }
 
+
+/* ============================================================
+   声音：实时合成，没有音频文件
+   不用现成音乐有三个理由，第一个最要紧：不碰版权；页面要零外部请求，
+   音频文件会让断网时不响；而且同一个时钟同时驱动画面与声音，
+   才谈得上「按节奏」——配一段现成音乐做不到这件事。
+
+   浏览器不允许未经用户手势就出声，所以必须点一下才启动。这是硬约束。
+   ============================================================ */
+const A={ctx:null,on:false,t0:0,step:0,nextT:0,beat:0,lastBeat:-1,ringHits:0};
+const PENT=[0,3,5,7,10];                       // 小调五声：太空电子最不容易难听的音阶
+const mtof=m=>440*Math.pow(2,(m-69)/12);
+
+function audioInit(){
+  const C=window.AudioContext||window.webkitAudioContext; if(!C)return false;
+  const ctx=new C(); A.ctx=ctx;
+
+  A.master=ctx.createGain(); A.master.gain.value=0;
+  A.master.connect(ctx.destination);
+
+  // 空间：两条不同延时的回授线，比单条更像混响，也比真混响便宜
+  A.wet=ctx.createGain(); A.wet.gain.value=0.5;
+  const mk=(time)=>{
+    const d=ctx.createDelay(2.0); d.delayTime.value=time;
+    const fb=ctx.createGain(); fb.gain.value=0.42;
+    const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=2600;
+    d.connect(lp); lp.connect(fb); fb.connect(d); d.connect(A.master);
+    return {d,fb};
+  };
+  A.d1=mk(0.37); A.d2=mk(0.53);
+  A.wet.connect(A.d1.d); A.wet.connect(A.d2.d);
+
+  // 主滤波：所有声源都过它，一根滑杆控制整体明暗
+  A.lp=ctx.createBiquadFilter(); A.lp.type='lowpass';
+  A.lp.frequency.value=P.bright; A.lp.Q.value=0.7;
+  A.lp.connect(A.master); A.lp.connect(A.wet);
+
+  // 垫音：三个失谐锯齿 + 缓慢移动的带通，构成底噪一样的持续音
+  A.droneG=ctx.createGain(); A.droneG.gain.value=0;
+  A.droneG.connect(A.lp);
+  A.droneOsc=[0,0.13,-0.17,7.02].map((cents,i)=>{
+    const o=ctx.createOscillator(); o.type=i===3?'triangle':'sawtooth';
+    o.detune.value=cents*100*(i===3?0:1);
+    const g=ctx.createGain(); g.gain.value=i===3?0.18:0.11;
+    o.connect(g); g.connect(A.droneG); o.start();
+    return o;
+  });
+  const lfo=ctx.createOscillator(); lfo.frequency.value=0.045;
+  const lg=ctx.createGain(); lg.gain.value=650;
+  lfo.connect(lg); lg.connect(A.lp.frequency); lfo.start();
+  A.lfo=lfo;
+
+  // 星尘：极轻的带通噪声
+  const nb=ctx.createBuffer(1,ctx.sampleRate*2,ctx.sampleRate);
+  const nd=nb.getChannelData(0);
+  for(let i=0;i<nd.length;i++) nd[i]=(Math.random()*2-1)*0.5;
+  const ns=ctx.createBufferSource(); ns.buffer=nb; ns.loop=true;
+  const nf=ctx.createBiquadFilter(); nf.type='bandpass'; nf.frequency.value=1800; nf.Q.value=0.8;
+  A.noiseG=ctx.createGain(); A.noiseG.gain.value=0.016;
+  ns.connect(nf); nf.connect(A.noiseG); A.noiseG.connect(A.lp); ns.start();
+  const nlfo=ctx.createOscillator(); nlfo.frequency.value=0.021;
+  const nlg=ctx.createGain(); nlg.gain.value=900;
+  nlfo.connect(nlg); nlg.connect(nf.frequency); nlfo.start();
+
+  A.t0=ctx.currentTime; A.nextT=ctx.currentTime+0.1; A.step=0;
+  return true;
+}
+
+/* 单音：短促的拨奏，用于琶音与环触发 */
+function ping(freq,when,dur,gain,type){
+  const ctx=A.ctx; if(!ctx)return;
+  const o=ctx.createOscillator(); o.type=type||'triangle'; o.frequency.value=freq;
+  const g=ctx.createGain();
+  g.gain.setValueAtTime(0,when);
+  g.gain.linearRampToValueAtTime(gain,when+0.008);      // 8ms 起振，避免爆音
+  g.gain.exponentialRampToValueAtTime(0.0001,when+dur);
+  o.connect(g); g.connect(A.lp);
+  o.start(when); o.stop(when+dur+0.02);
+}
+
+/* 低频脉冲：踩在拍上 */
+function thump(when,gain){
+  const ctx=A.ctx; if(!ctx)return;
+  const o=ctx.createOscillator(); o.type='sine';
+  const base=mtof(P.root-12);
+  o.frequency.setValueAtTime(base*1.6,when);
+  o.frequency.exponentialRampToValueAtTime(base,when+0.09);
+  const g=ctx.createGain();
+  g.gain.setValueAtTime(0,when);
+  g.gain.linearRampToValueAtTime(gain,when+0.006);
+  g.gain.exponentialRampToValueAtTime(0.0001,when+0.42);
+  o.connect(g); g.connect(A.master);                     // 低音不进延迟，否则糊
+  o.start(when); o.stop(when+0.45);
+}
+
+/* 前瞻调度：定时器只负责「排下一小段」，声音的时刻由 audioContext 给
+   —— 用 rAF 排音会随掉帧走音 */
+function audioSchedule(){
+  if(!A.on||!A.ctx) return;
+  const ctx=A.ctx, spb=60/P.bpm, step=spb/2;             // 八分音符
+  while(A.nextT < ctx.currentTime+0.12){
+    const s=A.step, when=A.nextT;
+    if(s%2===0 && P.pulse>0) thump(when, 0.34*P.pulse/100);
+    if(P.arp>0 && (s%2===1 || s%8===6)){
+      const deg=PENT[(Math.floor(s/1)*3+ (s%5))%PENT.length];
+      const oct=12*(1+((s>>2)%3));
+      ping(mtof(P.root+deg+oct), when, 0.55, 0.16*P.arp/100, 'triangle');
+    }
+    A.nextT+=step; A.step++;
+  }
+}
+
+/* 环从镜头掠过时的一声。视觉事件驱动声音，这是「同步」真正发生的地方。 */
+function ringBlip(){
+  if(!A.on||!A.ctx||P.blip<=0) return;
+  if(A.ringHits++ % 2) return;                            // 太密就减半
+  const deg=PENT[(A.ringHits*2)%PENT.length];
+  ping(mtof(P.root+deg+24), A.ctx.currentTime+0.005, 0.9, 0.13*P.blip/100, 'sine');
+}
+
+function audioSync(){
+  if(!A.on||!A.ctx) return;
+  A.master.gain.setTargetAtTime(P.vol/100*0.55, A.ctx.currentTime, 0.08);
+  A.droneG.gain.setTargetAtTime(P.drone/100*0.18, A.ctx.currentTime, 0.15);
+  A.lp.frequency.setTargetAtTime(P.bright, A.ctx.currentTime, 0.12);
+  const fb=P.space/100*0.62;
+  A.d1.fb.gain.setTargetAtTime(fb, A.ctx.currentTime, 0.1);
+  A.d2.fb.gain.setTargetAtTime(fb*0.9, A.ctx.currentTime, 0.1);
+  const f=mtof(P.root);
+  A.droneOsc.forEach((o,i)=>o.frequency.setTargetAtTime(i===3?f*1.5:f, A.ctx.currentTime, 0.2));
+  A.beat=(A.ctx.currentTime-A.t0)/(60/P.bpm);
+}
+
+async function soundToggle(){
+  const btn=$('sound');
+  if(!A.on){
+    if(!A.ctx && !audioInit()){ btn.textContent='No audio'; btn.disabled=true; return; }
+    await A.ctx.resume();
+    A.t0=A.ctx.currentTime; A.nextT=A.ctx.currentTime+0.08; A.step=0;
+    A.on=true; btn.textContent='Sound off'; btn.setAttribute('aria-pressed','true');
+    A.timer=setInterval(audioSchedule,25);
+  }else{
+    A.on=false; clearInterval(A.timer);
+    A.master.gain.setTargetAtTime(0,A.ctx.currentTime,0.05);
+    btn.textContent='Sound on'; btn.setAttribute('aria-pressed','false');
+  }
+}
+
 /* ---------- 主循环 ---------- */
 let last=performance.now(),acc=0,frames=0,shown=0;
 function tick(now){
   const dt=Math.min(0.05,(now-last)/1000); last=now;
   if(!paused){
+    audioSync();
+    // 拍子推一下速度：同一个时钟同时管声音和运动，这样「按节奏」才是真的
+    let kick=0;
+    if(A.on&&P.beatMove&&!reduce){
+      const b=Math.floor(A.beat);
+      if(b!==A.lastBeat){ A.lastBeat=b; cam.push+=P.speed*0.55; }
+      kick=Math.max(0,1-(A.beat-Math.floor(A.beat))*3);   // 拍点余晖，给灯用
+    }
+    A.kick=kick;
     const v=(reduce?0:P.speed)+cam.push;
+    const before=cam.z;
     cam.z+=v*dt; cam.push*=Math.pow(0.06,dt);
     if(!reduce) cam.spin+=P.spin*Math.PI/180*dt;
+    // 每越过一整个环距，就是一环从镜头掠过 → 触发一声
+    if(Math.floor(before/P.gap)!==Math.floor(cam.z/P.gap)) ringBlip();
     const depth=P.rings*P.gap;
     cam.z-=Math.floor(cam.z/depth)*depth;
   }
@@ -328,6 +505,7 @@ function setPaused(v){paused=v;const b=$('play');b.textContent=v?'Play':'Pause';
 $('play').onclick=()=>setPaused(!paused);
 $('reset').onclick=()=>{cam.tgX=0.42;cam.tgY=-0.26;cam.push=0};
 $('reseed').onclick=()=>{P.seed=Math.random().toString(36).slice(2,9);build()};
+$('sound').onclick=soundToggle;
 $('toggle').onclick=e=>{const open=$('panel').classList.toggle('open');
   e.currentTarget.setAttribute('aria-pressed',open?'true':'false')};
 
