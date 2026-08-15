@@ -352,7 +352,7 @@ function render(g,w,h,dpr,p,t,cm){
   const SINK=Math.min(0.42,2.6/n), APPR=Math.min(0.5,3.4/n);
   const Rt=Math.min(w,h)*0.5*p.trad;
   for(let i=0;i<n;i++){
-    const e=((i/n+t/Math.max(0.1,p.turn))%1+1)%1; // 0 = 正在读位，→1 = 即将回到读位
+    const e=((t/Math.max(0.1,p.turn)-i/n)%1+1)%1;   // 符号：t 在前、i 在后。写成 i/n+t/turn 会让句号越大越早到读位，整篇倒着播 // 0 = 正在读位，→1 = 即将回到读位
     let rad,alpha,szf;
     if(e<SINK){                                   // 读完，旋转着向内收，沉进黑洞
       const k=smooth(e/SINK);
@@ -417,7 +417,7 @@ function cycle(){return P.turn}
 // 环绕模型：ang = READ + i/n*2π + spin，转到读位(ang≡READ)的那一句最亮
 function activeIdx(){
   const n=lines.length; if(!n)return -1;
-  const frac=((-(T/P.turn))%1+1)%1;
+  const frac=((T/P.turn)%1+1)%1;
   return Math.round(frac*n)%n;
 }
 let lastIdx=-2;
@@ -466,7 +466,7 @@ function setPaused(v){
 }
 function jump(i){
   const n=lines.length; i=((i%n)+n)%n;
-  T=P.turn*((n-i)%n)/n;            // 把这一句转到读位
+  T=P.turn*(i%n)/n;                // 把这一句转到读位
   lastIdx=-2;
 }
 $('play').onclick=()=>setPaused(!paused);
