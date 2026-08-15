@@ -60,11 +60,16 @@ sec "体积与索引"
 BIG=$(find . -type f -not -path './.git/*' -size +25M | head -3)
 [ -z "$BIG" ] && ok "无超过 25MB 的文件" || { echo "$BIG"; no "有文件超过 25MB（GitHub 单文件上限 100MB，超 25MB 先跟 Tony 说）"; }
 
+# 作品必须同时挂在**首页**和 **README** 上。
+# 只查首页是不够的：Oculus 发布之后在 README 里缺了一整天没人发现，
+# 是 Tony 自己在 GitHub 上翻 README 才看出来的。闸门放过去的东西，人就得替它兜底。
 for f in $PAGES; do
   d=$(dirname "${f#./}")
   [ "$d" = "." ] && continue
   grep -q "href=\"$d/\"" index.html \
     && ok "$d 已挂在索引页上" || no "$d 做了但首页没链接，等于没发布"
+  grep -q "($d/)" README.md \
+    && ok "$d 已列入 README" || no "$d 做了但 README 的表里没有"
 done
 
 printf "\n"
