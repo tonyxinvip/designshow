@@ -6,6 +6,7 @@ Things Tony Xin made. The kind that run in a browser.
 
 | Work | Published | Notes |
 |---|---|---|
+| [Best Before](bestbefore/) | 2026-08-17 | A wall of dated paper notes. Ninety days is the shelf life; past that they yellow, curl and come off the wall. Reads the real calendar |
 | [Armature](armature/) | 2026-08-15 | A lattice of rods and ball joints at real depths. Fly through it |
 | [Life Is an Ocean](letter/) | 2026-08-15 | A friend's handwritten letter, in Chinese, turned into a tunnel of its own characters. Text used with permission |
 | [Oculus](oculus/) | 2026-08-15 | A dome of coloured slats, built in 3D and twelve-fold. Nothing spins: it holds still and jumps. A bell on every jump |
