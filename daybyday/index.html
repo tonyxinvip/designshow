@@ -123,6 +123,18 @@ const REDUCE=matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 const lerp=(a,b,t)=>a+(b-a)*t;
+/* 緩動。
+   第一版的鏡頭平滑寫成 cur+=(tgt-cur)*0.055 —— 那是**按帧**算的：
+   同一行代碼在 60fps 下兩下就到位，在 19fps 下要爬半天。
+   所有平滑一律改成按時間：tau 是「追到 63% 所需的秒數」。 */
+const approach=(cur,tgt,tau,dt)=>cur+(tgt-cur)*(1-Math.exp(-dt/tau));
+const smoothstep=t=>{t=clamp(t,0,1);return t*t*(3-2*t);};
+const easeOutCubic=t=>1-Math.pow(1-clamp(t,0,1),3);
+const easeInOutCubic=t=>{t=clamp(t,0,1);
+  return t<0.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;};
+/* 落定的餘韻一律用「sin 起振 + 指數衰減」寫在用到的地方：
+   sin(0)=0 保證動作從靜止開始。用 cos 會讓形變在動作第一帧就已經發生——
+   壓扁那一版就栽在這裡，紙在半空中先扁了 2.8%。 */
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);
   t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
 function hex(h){const n=parseInt(h.slice(1),16);return[(n>>16)&255,(n>>8)&255,n&255];}
@@ -520,15 +532,17 @@ function chime(freq,gain){
   const t=AC.currentTime;
   const g=AC.createGain();
   g.gain.setValueAtTime(0,t);
-  g.gain.linearRampToValueAtTime(gain,t+0.006);
-  g.gain.exponentialRampToValueAtTime(0.0001,t+2.2);
-  g.connect(AC.destination);
+  g.gain.linearRampToValueAtTime(gain,t+0.022);      // 6ms 起振是一聲喀噠
+  g.gain.exponentialRampToValueAtTime(0.0001,t+2.4);
+  const lp=AC.createBiquadFilter();                  // 削掉最刺的那一段
+  lp.type='lowpass'; lp.frequency.value=2600; lp.Q.value=0.4;
+  g.connect(lp).connect(AC.destination);
   // 磬：基音 + 一個微微失諧的泛音，衰減快而尾巴長
   [[1,1],[2.76,0.24],[5.4,0.08]].forEach(([m,a])=>{
     const o=AC.createOscillator(), og=AC.createGain();
     o.type='sine'; o.frequency.value=freq*m;
     og.gain.value=a;
-    o.connect(og).connect(g); o.start(t); o.stop(t+2.3);
+    o.connect(og).connect(g); o.start(t); o.stop(t+2.5);
   });
 }
 function rustle(dur,gain,f){
@@ -584,17 +598,17 @@ const countEl=document.getElementById('count');
 const hanEl=document.getElementById('han');
 scrub.min=0; scrub.max=N; scrub.step=1; scrub.value=0;
 
-function paste(n){
+function paste(n,quiet){
   if(count>=N)return;
   const s=strips[count];
   count++;
   scrub.value=count;
   if(!REDUCE){
-    s.anim={t0:performance.now(),dur:0.52+Math.random()*0.16,
-            dx:(Math.random()*2-1)*30, dy:-34-Math.random()*26, rot:(Math.random()*2-1)*0.16};
+    s.anim={t0:performance.now(),dur:0.86+Math.random()*0.18,
+            dx:(Math.random()*2-1)*17, dy:-19-Math.random()*15, rot:(Math.random()*2-1)*0.115};
   }
-  rustle(0.26,0.045,2300);
-  chime(note(count-1),0.09);
+  rustle(quiet?0.18:0.26,quiet?0.022:0.045,2300);
+  chime(note(count-1),quiet?0.035:0.09);
   if(count>=N) enterFull();
   markDirty();
 }
@@ -602,14 +616,19 @@ function unpaste(){ if(count>0){count--;scrub.value=count;markDirty();} }
 function setCount(n){
   n=clamp(n|0,0,N);
   if(n===count)return;
-  count=n; scrub.value=n; follow=true;
+  count=n; scrub.value=n; follow=true; camTween=null;
   for(const s of strips)s.anim=null;
   if(count>=N&&phase==='fill')enterFull(); else if(count<N){phase='fill';pT=0;droneOff();}
   markDirty();
 }
-function enterFull(){ phase='full'; pT=0; bell(); }
+function enterFull(){
+  phase='full'; pT=0; bell();
+  // 拉遠是一次有頭有尾的運鏡，記下起點交給補間
+  aimCamera();
+  camTween={t0:performance.now(),dur:2.6,z0:camZ,px0:panX,py0:panY};
+}
 function reset(){
-  count=0; scrub.value=0; phase='fill'; pT=0; sinceLast=0; follow=true;
+  count=0; scrub.value=0; phase='fill'; pT=0; sinceLast=0; follow=true; camTween=null;
   for(const s of strips)s.anim=null;
   droneOff(); markDirty();
 }
@@ -618,7 +637,7 @@ function reset(){
    走向光明：鏡頭往燈那邊推進，紙由光心往外化掉，
    暗角反過來變成從中心漲開的光。四個字最後也散掉。 */
 let camZ=1, panX=0, panY=0, lightT=0, beat=0;
-let tZ=1, tPX=0, tPY=0, follow=true;
+let tZ=1, tPX=0, tPY=0, follow=true, camTween=null;
 const LAMP=()=>[MX+SW*0.42, MT+SH*0.32];       // 燈的世界坐標，與 makeBG 同一處
 function focusScreen(){ const L=LAMP(); return w2s(L[0],L[1]); }
 // 鏡頭目標：貼的時候近景跟著最新那張；拉遠時回到全景；推進時走向燈
@@ -643,23 +662,28 @@ function aimCamera(){
 }
 
 /* ---------- 幀 ---------- */
-let last=performance.now(), dirty=true, drawnAt=0;
+let last=performance.now(), dirty=true, drawnAt=0, openT=0;
 const markDirty=()=>{dirty=true;};
 
 function frame(now){
   requestAnimationFrame(frame);
   const dt=Math.min(0.05,(now-last)/1000); last=now;
 
-  let busy=playing||!!drag||phase!=='fill';
-  for(const s of strips) if(s.anim){busy=true;break;}
+  if(openT<1){ openT=Math.min(1,openT+dt/1.5); dirty=true; }
+  let busy=playing||!!drag||phase!=='fill'||openT<1, flying=false;
+  for(const s of strips) if(s.anim){flying=true;busy=true;break;}
   if(!busy&&!dirty)return;
-  if(busy&&!dirty&&phase==='fill'&&now-drawnAt<31)return;
+  // 原來這裡不分情況壓到 30fps ——鏡頭正在移動時這等於自己砍掉一半順滑。
+  // 只有鏡頭停穩、也沒有紙在飛的時候才省。
+  const camStill=Math.abs(tZ-camZ)<0.0015 &&
+                 Math.abs(tPX-panX)<0.6 && Math.abs(tPY-panY)<0.6;
+  if(busy&&!dirty&&!flying&&camStill&&phase==='fill'&&now-drawnAt<31)return;
   drawnAt=now; dirty=false;
 
   /* 推進 */
   if(phase==='fill'){
     lightT=0; beat=0;
-    if(playing&&count<N){
+    if(playing&&count<N&&openT>0.45){          // 淡入沒完不要開始貼
       sinceLast+=dt;
       if(sinceLast>=PASTE_EVERY){sinceLast=0;paste();}
     }
@@ -667,29 +691,40 @@ function frame(now){
     pT+=dt;
     if(phase==='full'){
       // 先花一秒多把鏡頭拉遠交出全貌，再讓四個字浮起來
-      beat=clamp((pT-1.5)/1.1,0,1);
+      beat=smoothstep((pT-1.9)/1.3);
       if(pT>4.4){phase='dissolve';pT=0;droneOn();}
     }else if(phase==='dissolve'){
-      lightT=clamp(pT/4.6,0,1)*0.92;
-      beat=1-clamp((pT-0.2)/0.9,0,1);
+      lightT=smoothstep(pT/4.8)*0.92;
+      beat=1-smoothstep((pT-0.15)/1.0);
       if(pT>4.6){phase='light';pT=0;}
     }else if(phase==='light'){
       lightT=0.92;
-      beat=clamp(pT/1.1,0,1);                  // 為道日損 浮起
+      beat=smoothstep(pT/1.4);                 // 為道日損 浮起
       if(pT>3.4){phase='fade';pT=0;}
     }else if(phase==='fade'){
-      beat=1-clamp(pT/1.2,0,1);
-      lightT=0.92*(1-clamp((pT-0.7)/1.6,0,1));
+      beat=1-smoothstep(pT/1.3);
+      lightT=0.92*(1-smoothstep((pT-0.7)/1.7));
       if(pT>2.7){droneOff();reset();}
     }
   }
 
-  /* 鏡頭：目標由 phase 決定，實際位置彈簧跟過去。
-     REDUCE 下不做彈簧，直接到位——但拉遠與推進本身保留，
-     否則整件作品的下半場就沒有了。 */
+  /* 鏡頭。
+     貼的時候是慢慢漂過去（按時間的指數追隨，tau 大一點才不急）；
+     「貼滿 → 拉遠」是一次有頭有尾的運鏡，用顯式補間配 easeInOutCubic——
+     指數逼近起手太快、又永遠差一點到位，做不出「停穩」的感覺。
+     REDUCE 下直接到位，但拉遠與推進本身保留，否則下半場就沒有了。 */
   aimCamera();
-  const k=REDUCE?1:(phase==='fill'?0.055:0.075);
-  camZ+=(tZ-camZ)*k; panX+=(tPX-panX)*k; panY+=(tPY-panY)*k;
+  if(REDUCE){ camZ=tZ; panX=tPX; panY=tPY; }
+  else if(camTween){
+    const q=easeInOutCubic((now-camTween.t0)/(camTween.dur*1000));
+    camZ=lerp(camTween.z0,tZ,q);
+    panX=lerp(camTween.px0,tPX,q); panY=lerp(camTween.py0,tPY,q);
+    if(q>=1)camTween=null;
+  }else{
+    const tau=phase==='fill'?0.55:0.30;
+    camZ=approach(camZ,tZ,tau,dt);
+    panX=approach(panX,tPX,tau,dt); panY=approach(panY,tPY,tau,dt);
+  }
 
   /* 背景 */
   const cw=cv.clientWidth, ch=cv.clientHeight, dpr=cv.width/cw;
@@ -733,6 +768,13 @@ function frame(now){
     drawBeat(txt,beat,phase==='light'||phase==='fade');
   }
 
+  /* 開場淡入：頁面一打開就是滿亮的牆，那一下本身就很硬 */
+  if(openT<1){
+    ctx.globalAlpha=1-easeInOutCubic(openT);
+    ctx.fillStyle='#0E0C09'; ctx.fillRect(0,0,cw,ch);
+    ctx.globalAlpha=1;
+  }
+
   /* 讀數 */
   countEl.textContent=count+' / '+N;
   hanEl.textContent=han(count);
@@ -742,16 +784,27 @@ function drawStrip(s,now,fs){
   const key=themeName+'|'+Math.round(S*100);
   if(s.key!==key||!s.cache){ s.cache=renderStrip(s); s.key=key; }
   const c=s.cache;
-  let x=s.x,y=s.y,rot=s.rot,al=1;
+  let x=s.x,y=s.y,rot=s.rot,al=1,zoom=1,squash=1,flight=0;
 
   if(s.anim){
     const p=clamp((now-s.anim.t0)/(s.anim.dur*1000),0,1);
     if(p>=1){s.anim=null;}
     else{
-      const e=1-Math.pow(1-p,3);
+      /* 貼上一張紙的四件事，缺哪一件都會顯得生硬：
+         1) 從近處壓到牆面 —— 縮放 1.13 → 1。第一版完全沒有這一項，
+            所以紙是「憑空出現」而不是「貼上去」。
+         2) 透明度用 smoothstep 而不是線性斜坡（原來 42% 就滿了，於是啪一下就在那了）
+         3) 位置與角度 easeOutCubic，末段幾乎不動 —— 才有「按住」的感覺
+         4) 落定之後壓一下再回彈，並且角度過衝一點點。沒有餘韻就是硬停。 */
+      const e=easeOutCubic(p);
+      const land=clamp((p-0.62)/0.38,0,1);          // 落定之後的餘韻
+      zoom=lerp(1.13,1,easeOutCubic(p/0.86));
       x+=s.anim.dx*(1-e); y+=s.anim.dy*(1-e);
-      rot+=s.anim.rot*(1-e);
-      al=clamp(p*2.4,0,1);
+      // 角度過衝：多轉 18% 再蕩回來
+      rot+=s.anim.rot*(1-e)-s.anim.rot*0.18*Math.exp(-land*5)*Math.sin(land*7.5);
+      al=smoothstep(p/0.52);
+      squash=1-0.045*Math.exp(-land*4.2)*Math.sin(land*9.5);
+      flight=1-p;
     }
   }
 
@@ -764,19 +817,28 @@ function drawStrip(s,now,fs){
     const d=Math.hypot(sp[0]-fs[0],sp[1]-fs[1]);
     const maxD=Math.hypot(cv.clientWidth,cv.clientHeight)*0.9;
     const delay=clamp(d/maxD,0,1)*0.72;
-    const gone=clamp((lightT-delay)/0.50,0,1);
+    const gone=smoothstep((lightT-delay)/0.50);
     al*=1-gone;
     if(al<=0.004)return;
     // 往光心飄一點
     const pull=gone*0.16;
     sp[0]+=(fs[0]-sp[0])*pull; sp[1]+=(fs[1]-sp[1])*pull;
+    zoom*=1+gone*0.10;                      // 被吸進光裡，不是原地淡掉
   }
 
-  const sc=scale*camZ;
+  const sc=scale*camZ*zoom;
   const dw=(s.w+c.pad*2)*sc, dh=(s.h+c.pad*2)*sc;
   ctx.save();
   ctx.globalAlpha=al;
   ctx.translate(sp[0],sp[1]); ctx.rotate(rot);
+  if(squash!==1)ctx.scale(1,squash);
+  if(flight>0.004){
+    // 離牆越遠，影子越散越偏——落定時自然收回烤在位圖裡的那層
+    const off=flight*11*scale*camZ;
+    ctx.shadowColor=T.shadow+(0.30*flight)+')';
+    ctx.shadowBlur=flight*26*scale*camZ;
+    ctx.shadowOffsetX=off*0.5; ctx.shadowOffsetY=off*1.3;
+  }
   ctx.drawImage(c.canvas,-dw/2,-dh/2,dw,dh);
   ctx.restore();
 }
@@ -850,7 +912,18 @@ function drawBeat(txt,a,onLight){
   ctx.textAlign='center'; ctx.textBaseline='middle';
   const chars=Array.from(txt);
   const y0=ch/2-(chars.length-1)*step/2;
-  chars.forEach((c,i)=>ctx.fillText(c,cw/2,y0+i*step+(1-a)*10));
+  const baseA=onLight?0.80:0.72;
+  // 逐字浮起：四個字一起淡入太齊，齊就顯得是「開了個圖層」而不是浮出來
+  chars.forEach((c,i)=>{
+    const q=smoothstep((a-i*0.075)/0.74);
+    if(q<=0.004)return;
+    ctx.globalAlpha=q*baseA;
+    ctx.save();
+    ctx.translate(cw/2, y0+i*step+(1-q)*size*0.22);
+    const z=lerp(1.06,1,q); ctx.scale(z,z);
+    ctx.fillText(c,0,0);
+    ctx.restore();
+  });
   ctx.restore();
 }
 
@@ -899,8 +972,8 @@ document.getElementById('fill').onclick=()=>{
   if(phase!=='fill'){reset();}
   // 快速鋪滿：一張一張帶聲音地上去，但間隔很短
   let k=count;
-  const step=()=>{ if(k>=N||phase!=='fill')return; paste(); k=count;
-    if(k<N)setTimeout(step,REDUCE?0:54); };
+  const step=()=>{ if(k>=N||phase!=='fill')return; paste(0,true); k=count;
+    if(k<N)setTimeout(step,REDUCE?0:96); };
   step();
 };
 document.getElementById('again').onclick=()=>{wakeAudio();reset();hideHint();};
