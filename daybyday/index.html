@@ -1,0 +1,960 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Lines from the Dao De Jing pasted onto an old wall, one after another, until the wall is full and the words go into the light.">
+<title>Day by Day</title>
+<style>
+  :root{
+    --ink:#0B0B0C;--panel:#12100D;--line:#2A251D;--text:#E9E2D2;--dim:#8B8272;--hi:#C9A25E;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --han:"Kaiti SC","STKaiti",KaiTi,"楷体","Songti SC","Noto Serif SC","STSong",SimSun,serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;overflow:hidden;background:#000}
+  body{font:14px/1.6 "Helvetica Neue",Helvetica,Arial,system-ui,sans-serif;color:var(--text);
+       display:flex;flex-direction:column}
+  #stage{position:relative;flex:1;min-height:0;overflow:hidden;background:#12100D}
+  #cv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+  #cv.drag{cursor:grabbing}
+
+  /* 舞台上的字压在土墙和青砖两种底上，混色混不出可读性——给一层自己的底 */
+  .float{position:absolute;z-index:6;background:rgba(11,10,8,.62);color:#EDE4D0;
+         border-radius:3px;padding:5px 9px;backdrop-filter:blur(3px)}
+  #back{left:14px;top:12px;font-size:12.5px;letter-spacing:.04em;text-decoration:none}
+  #back:hover{color:var(--hi)}
+  #back:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--hi);outline-offset:2px}
+  #hint{left:14px;bottom:12px;max-width:min(540px,calc(100% - 28px));margin:0;font-size:12px;
+        line-height:1.5;pointer-events:none;transition:opacity .6s cubic-bezier(.32,.72,0,1)}
+  #hint.gone{opacity:0}
+  #tally{right:14px;top:12px;margin:0;font:15px/1.3 var(--han);text-align:right;
+         pointer-events:none;letter-spacing:.08em}
+  #tally b{display:block;font-weight:400;font-size:11px;letter-spacing:.16em;
+           color:#A99C84;font-family:"Helvetica Neue",Helvetica,Arial,sans-serif}
+
+  #bar{flex:none;display:flex;align-items:center;gap:10px;padding:9px 14px;
+       background:var(--panel);border-top:1px solid var(--line);flex-wrap:wrap}
+  button{background:transparent;border:1px solid var(--line);color:var(--text);border-radius:3px;
+    padding:7px 11px;font:500 12.5px/1 inherit;cursor:pointer;white-space:nowrap;
+    transition:border-color .18s cubic-bezier(.32,.72,0,1),color .18s cubic-bezier(.32,.72,0,1)}
+  button:hover{border-color:var(--hi);color:var(--hi)}
+  button[aria-pressed="true"]{border-color:var(--hi);color:var(--hi)}
+  #clock{display:flex;align-items:center;gap:10px;flex:1;min-width:200px}
+  #scrub{flex:1;min-width:90px;accent-color:var(--hi);height:18px;margin:0;background:transparent}
+  #count{flex:none;font:12.5px/1 var(--mono);color:var(--hi);font-variant-numeric:tabular-nums}
+  #title{flex:none;font-size:12.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--dim)}
+
+  .sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+      clip:rect(0 0 0 0);white-space:nowrap;border:0}
+  @media (prefers-reduced-motion:reduce){#hint,button{transition:none}}
+  @media (max-width:780px){
+    #bar{gap:8px;padding:8px 11px}
+    button{padding:7px 9px;font-size:12px}
+    #clock{order:5;flex-basis:100%;min-width:0}
+    #title{display:none}
+  }
+  @media (max-width:430px){ #hint{font-size:11px} #tally{font-size:13px} }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <canvas id="cv" aria-describedby="alt"></canvas>
+  <a id="back" class="float" href="../">← Tony’s Trials</a>
+  <p id="tally" class="float"><b>PASTED</b><span id="han">〇</span></p>
+  <p id="hint" class="float">Lines from the Dao De Jing go up one at a time · Click the wall to paste
+     the next · When the wall is full the words go into the light</p>
+</div>
+
+<div id="bar">
+  <button id="play" aria-pressed="true">Pause</button>
+  <button id="fill">Fill the wall</button>
+  <button id="again">Bare wall</button>
+  <button id="lights" aria-pressed="false">Lights out</button>
+  <button id="sound" aria-pressed="true">Sound off</button>
+  <div id="clock">
+    <input id="scrub" type="range" aria-label="How many lines are pasted up">
+    <span id="count"></span>
+  </div>
+  <div id="title">Day by Day</div>
+</div>
+
+<div id="alt" class="sr" aria-live="off">
+  <p>An old wall. Lines from the Dao De Jing, written vertically on strips of paper, are pasted onto
+     it one after another; each new strip overlaps the ones already there, and the earliest strips
+     are the most yellowed. When the last one goes up the wall reads 為學日益 — day by day it
+     increases — and then every strip dissolves into light and the wall reads 為道日損 — day by day
+     it diminishes. Both halves are from chapter 48. The lines, in order:</p>
+  <ol id="altlist" lang="zh-Hant"></ol>
+  <p>Text: Laozi, <i lang="zh-Hant">道德經</i>, public domain.
+     <b>Tony Xin</b>, <time datetime="2026-08-17">2026-08-17</time></p>
+</div>
+
+<script>
+/* ============================================================
+   Day by Day —— 《道德經》貼上一面舊牆，貼滿之後走進光裡
+
+   為學日益，為道日損。（第四十八章）
+   上半場是「益」：一句一張，貼上去，後貼的壓住先貼的，
+   先貼的紙色最舊——牆本身記著積累的順序。
+   下半場是「損」：貼滿之後，所有紙化進光裡，四個字最後也散掉。
+
+   結構上只有一個狀態量：count（貼了幾張）。
+   紙的位置、紙色、印章全是 (index) 的純函數，所以拖動進度條來回都不會出錯。
+   貼上的過場動畫只疊在最新那一張上。
+
+   ── 原文說明（維護用，不是頁面內容）────────────────────────
+   紙上的文字是《道德經》通行本的名句，繁體。這批文字**未能在製作環境裡
+   對著權威版本逐字核對**（出網受限，ctext / 維基文库 / Gutenberg 均不可達）。
+   全部集中在下面 LINES 一處，替換整批只需改這一個數組。
+   發佈前應對照印本或 ctext.org 校一遍。
+   ──────────────────────────────────────────────────────────
+
+   性能上沿用前一件作品實測出來的三條：
+   投影烤進離屏位圖（不要每帧 shadowBlur）、視口外不畫、靜止不畫。
+   ============================================================ */
+(function(){
+"use strict";
+
+const cv=document.getElementById('cv');
+const ctx=cv.getContext('2d',{alpha:false});
+const REDUCE=matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const lerp=(a,b,t)=>a+(b-a)*t;
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);
+  t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function hex(h){const n=parseInt(h.slice(1),16);return[(n>>16)&255,(n>>8)&255,n&255];}
+function mix(c1,c2,t){const a=hex(c1),b=hex(c2);
+  return`rgb(${Math.round(lerp(a[0],b[0],t))},${Math.round(lerp(a[1],b[1],t))},${Math.round(lerp(a[2],b[2],t))})`;}
+
+/* ---------- 原文 ---------- */
+const LINES=[
+  [1,'道可道，非常道'],
+  [1,'玄之又玄，眾妙之門'],
+  [2,'有無相生，難易相成'],
+  [5,'天地不仁，以萬物為芻狗'],
+  [5,'多言數窮，不如守中'],
+  [7,'天長地久'],
+  [8,'上善若水'],
+  [9,'金玉滿堂，莫之能守'],
+  [11,'有之以為利，無之以為用'],
+  [12,'五色令人目盲'],
+  [13,'寵辱若驚'],
+  [16,'致虛極，守靜篤'],
+  [16,'知常曰明'],
+  [18,'大道廢，有仁義'],
+  [19,'見素抱樸'],
+  [22,'少則得，多則惑'],
+  [22,'曲則全'],
+  [25,'人法地，地法天，天法道，道法自然'],
+  [26,'重為輕根，靜為躁君'],
+  [28,'復歸於樸'],
+  [33,'知人者智，自知者明'],
+  [33,'知足者富'],
+  [36,'柔弱勝剛強'],
+  [38,'上德不德，是以有德'],
+  [40,'反者道之動'],
+  [41,'大方無隅，大器晚成'],
+  [41,'大音希聲，大象無形'],
+  [42,'道生一，一生二，二生三，三生萬物'],
+  [43,'天下之至柔，馳騁天下之至堅'],
+  [44,'知足不辱，知止不殆'],
+  [45,'大成若缺，其用不弊'],
+  [45,'大直若屈，大巧若拙'],
+  [46,'知足之足，常足矣'],
+  [47,'不出戶，知天下'],
+  [48,'無為而無不為'],
+  [49,'聖人無常心，以百姓心為心'],
+  [50,'出生入死'],
+  [55,'含德之厚，比於赤子'],
+  [56,'知者不言，言者不知'],
+  [59,'治人事天，莫若嗇'],
+  [60,'治大國若烹小鮮'],
+  [64,'千里之行，始於足下'],
+  [64,'為之於未有，治之於未亂'],
+  [67,'不敢為天下先'],
+  [73,'天網恢恢，疏而不失'],
+  [74,'民不畏死，奈何以死懼之'],
+  [76,'人之生也柔弱，其死也堅強'],
+  [78,'天下莫柔弱於水'],
+  [80,'甘其食，美其服'],
+  [81,'信言不美，美言不信'],
+  [81,'天之道，利而不害'],
+];
+const N=LINES.length;
+const SEAL='道';                       // 印文
+const BEAT_A='為學日益', BEAT_B='為道日損';
+
+/* 漢數字：讀數用「三十七」而不是 37，這是這件東西的年代感的一部分 */
+const H1='〇一二三四五六七八九';
+function han(n){
+  if(n<10)return H1[n];
+  if(n===10)return '十';
+  const t=(n/10)|0, o=n%10;
+  return (t>1?H1[t]:'')+'十'+(o?H1[o]:'');
+}
+
+/* ---------- 主題 ---------- */
+const THEMES={
+  light:{wall:'#C6B393',lamp:'rgba(255,246,222,.66)',lampMid:'rgba(255,240,206,.20)',
+         vig:'rgba(52,38,22,.36)',
+         fresh:'#EFE6CD',aged:'#C6AA78',ink:'#2A2118',seal:'#9E2B25',
+         brick:'#8A8377',brickDark:'#514B41',
+         shadow:'rgba(48,34,18,',dust:'rgba(255,250,236,',glow:'#FFF6E2'},
+  dark:{ wall:'#191410',lamp:'rgba(255,198,124,.22)',lampMid:'rgba(255,186,110,.07)',
+         vig:'rgba(0,0,0,.68)',
+         fresh:'#D8CDB4',aged:'#A89469',ink:'#211A12',seal:'#8E2A24',
+         brick:'#2A2C28',brickDark:'#14150F',
+         shadow:'rgba(0,0,0,',dust:'rgba(255,222,172,',glow:'#FFE9C4'}
+};
+let themeName=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
+let T=THEMES[themeName];
+
+/* ---------- 竖排版式 ----------
+   不加標點：古籍本來不點，而且竖排的逗號要占右上角、單獨處理很容易做丑。
+   改用「同一列里，句與句之間留一個字的空」來交代停頓——更古，也更省。 */
+const FS=30, CH=FS*1.17, COL=FS*1.62, CLAUSE_GAP=FS*0.62;
+const PAD_X=17, PAD_T=25, PAD_B=46;      // 底下留給章號與印
+
+function measureStrip(text){
+  const clauses=text.split('，').filter(s=>s.length);
+  const cols=[]; let cur=[];
+  const len=c=>c.reduce((a,s)=>a+s.length,0)+(c.length-1);
+  for(const cl of clauses){
+    if(cur.length && len(cur)+cl.length+1>9){cols.push(cur);cur=[cl];}
+    else cur.push(cl);
+  }
+  if(cur.length)cols.push(cur);
+  let maxH=0;
+  for(const c of cols){
+    const h=c.reduce((a,s)=>a+s.length,0)*CH+(c.length-1)*CLAUSE_GAP;
+    if(h>maxH)maxH=h;
+  }
+  return {cols, w:Math.round(cols.length*COL+PAD_X*2), h:Math.round(maxH+PAD_T+PAD_B)};
+}
+
+/* ---------- 世界与布局 ----------
+   三段鏡頭，這是這件東西成立的關鍵：
+   貼的時候用近景（字要讀得清），鏡頭跟著新貼的那張走，像有人沿牆貼過去；
+   貼滿的一刻**拉遠，把整面牆一次交出來**——高潮必須看得見全貌；
+   然後才往燈那邊推進去。
+   camZ=1 定義成「整片條幅區剛好進畫面」，近景是 fillZ 倍。 */
+const CW=150, ROWH=290, BRICK_H=150;
+let MX=430, MT=150, MB=130;   // 由 layout 按可見範圍反推
+let cols=13, rows=4, SW=0, SH=0, W=0, H=0, brickTop=0;
+let scale=1, fillZ=1.8;
+
+// 近景時一個字該有多少屏幕像素——列數從這裡反推
+function targetPx(cw){ return cw<520?17:cw<900?21:24; }
+
+const strips=LINES.map(([ch,text],i)=>{
+  const m=measureStrip(text);
+  return {i, ch, text, cols:m.cols, w:m.w, h:m.h,
+    x:0, y:0, rot:0, seed:i*2654435761+7,
+    // 先貼的紙最舊：牆自己記著積累的順序
+    age:1-i/(N-1),
+    seal:false, cache:null, key:'', anim:null};
+});
+
+function layout(){
+  const cw=cv.clientWidth||1, ch=cv.clientHeight||1;
+  const esFill=targetPx(cw)/FS;              // 近景需要的有效縮放
+  cols=clamp(Math.round((cw/esFill/1.06)/CW),3,20);
+  rows=Math.ceil(N/cols);
+  SW=cols*CW; SH=rows*ROWH;
+  scale=Math.min(cw/(SW*1.10), ch/((SH+BRICK_H+70)*1.06));   // camZ=1 → 全景
+  fillZ=Math.max(1,esFill/scale);
+  // 牆必須比 camZ=1 的可見範圍更大一圈。第一版沒算這個，拉遠時左右露出了牆的邊。
+  const visW=cw/scale, visH=ch/scale;
+  MX=Math.max(260,(visW-SW)/2+70);
+  MT=Math.max(130,(visH-(SH+BRICK_H))/2+70);
+  MB=MT;
+  W=SW+MX*2; brickTop=MT+SH+40; H=brickTop+BRICK_H+MB;
+  place();
+}
+function panBounds(z){
+  const cw=cv.clientWidth||1, ch=cv.clientHeight||1, es=scale*z;
+  return [Math.max(0,(W*es-cw)/2), Math.max(0,(H*es-ch)/2)];
+}
+const w2s=(x,y)=>{const es=scale*camZ;
+  return[cv.clientWidth/2+panX+(x-W/2)*es, cv.clientHeight/2+panY+(y-H/2)*es];};
+const s2w=(sx,sy)=>{const es=scale*camZ;
+  return[(sx-cv.clientWidth/2-panX)/es+W/2, (sy-cv.clientHeight/2-panY)/es+H/2];};
+// 把某個世界點放到畫面正中所需的平移量
+function panTo(px,py,z){
+  const es=scale*z, b=panBounds(z);
+  return [clamp(-(px-W/2)*es,-b[0],b[0]), clamp(-(py-H/2)*es,-b[1],b[1])];
+}
+
+function place(){
+  // 牆是長年累月貼上去的，所以刻意不整齊：抖動給到接近三分之一格，允許真重疊。
+  // 貼佈告的牆不會排成表格。
+  strips.forEach((s,idx)=>{
+    const r=mulberry32(s.seed);
+    const cx=cols-1-(idx%cols), cy=(idx/cols)|0;   // 由右至左
+    s.x=MX+cx*CW+CW/2+(r()*2-1)*CW*0.22;
+    s.y=MT+cy*ROWH+s.h/2+14+(r()*2-1)*ROWH*0.12;
+    s.rot=(r()*2-1)*0.035;                 // 糊上去的比釘上去的正，但也不會完全正
+    s.seal=r()<0.32;
+    s.sealDx=(r()*2-1)*3;
+  });
+}
+
+/* ---------- 一張紙渲成位圖 ---------- */
+let S=2;
+function paperCanvas(s){
+  const PP=9, w=s.w, h=s.h;
+  const c=document.createElement('canvas');
+  c.width=Math.ceil((w+PP*2)*S); c.height=Math.ceil((h+PP*2)*S);
+  const g=c.getContext('2d');
+  g.scale(S,S); g.translate(PP,PP);
+  const r=mulberry32(s.seed);
+  const a=s.age;                                  // 0 新 → 1 舊
+  const base=mix(T.fresh,T.aged,a);
+
+  /* 紙面：宣紙，邊緣毛而不是撕開 */
+  g.save();
+  fuzzPath(g,0,0,w,h,mulberry32(s.seed+5));
+  g.clip();
+  g.fillStyle=base; g.fillRect(0,0,w,h);
+  // 水漬與斑駁
+  for(let i=0;i<6;i++){
+    const gx=r()*w, gy=r()*h, rad=lerp(w*0.3,w*1.0,r());
+    const gr=g.createRadialGradient(gx,gy,2,gx,gy,rad);
+    const al=(i%2?0.05:0.045)+a*0.09;
+    gr.addColorStop(0,i%2?`rgba(255,252,238,${al})`:`rgba(120,88,44,${al})`);
+    gr.addColorStop(1,'rgba(0,0,0,0)');
+    g.fillStyle=gr; g.fillRect(0,0,w,h);
+  }
+  // 纖維與顆粒
+  g.strokeStyle=`rgba(112,88,52,${0.05+a*0.05})`; g.lineWidth=0.7;
+  for(let i=0;i<30;i++){const x=r()*w,y=r()*h;
+    g.beginPath();g.moveTo(x,y);g.lineTo(x+(r()*2-1)*4,y+(r()*2-1)*14);g.stroke();}
+  for(let i=0;i<300;i++){
+    g.fillStyle=`rgba(76,56,30,${r()*(0.05+a*0.06)})`;
+    g.fillRect(r()*w,r()*h,r()*1.4+0.4,r()*1.4+0.4);
+  }
+  // 界行：木版書的直格
+  g.strokeStyle=`rgba(60,44,26,${0.10+a*0.05})`; g.lineWidth=0.8;
+  for(let k=1;k<s.cols.length;k++){
+    const x=PAD_X+k*COL-COL*0.5;
+    g.beginPath(); g.moveTo(x,PAD_T*0.5); g.lineTo(x,h-PAD_B*0.55); g.stroke();
+  }
+  g.strokeStyle=`rgba(60,44,26,${0.16+a*0.06})`; g.lineWidth=1.1;
+  g.strokeRect(6,6,w-12,h-12);
+
+  /* 正文：竖排，列由右至左 */
+  g.fillStyle=T.ink; g.globalAlpha=1-a*0.24;
+  g.textAlign='center'; g.textBaseline='middle';
+  g.font=`500 ${FS}px ${FAM}`;
+  s.cols.forEach((colClauses,ci)=>{
+    const x=w-PAD_X-ci*COL-COL/2;             // 右起第一列
+    let y=PAD_T+CH/2;
+    colClauses.forEach((clause,qi)=>{
+      if(qi)y+=CLAUSE_GAP;
+      for(const chr of clause){ g.fillText(chr,x,y); y+=CH; }
+    });
+  });
+
+  /* 章號：左下，小字竖排 */
+  g.globalAlpha=1-a*0.1;
+  g.font=`${Math.round(FS*0.42)}px ${FAM}`;
+  const cn=han(s.ch);                       // 只寫數字：「第二十二章」竖排放不下會被切
+  let cy2=h-PAD_B+14;
+  const cxx=PAD_X*0.66;
+  for(const chr of cn){ g.fillText(chr,cxx,cy2); cy2+=FS*0.48; }
+  g.globalAlpha=1;
+
+  /* 印：朱砂方印，壓在左下 */
+  if(s.seal){
+    const sz=Math.round(FS*0.86), sx=w-PAD_X-s.cols.length*COL+COL*0.5+s.sealDx, sy=h-PAD_B+sz*0.55;
+    g.save();
+    g.translate(sx,sy); g.rotate((r()*2-1)*0.06);
+    g.fillStyle=T.seal; g.globalAlpha=0.86;
+    roundRect(g,-sz/2,-sz/2,sz,sz,3); g.fill();
+    // 印文反白
+    g.globalCompositeOperation='destination-out';
+    g.font=`700 ${Math.round(sz*0.72)}px ${FAM}`;
+    g.fillStyle='#000'; g.textAlign='center'; g.textBaseline='middle';
+    g.fillText(SEAL,0,sz*0.03);
+    g.restore();
+  }
+  g.restore();
+
+  /* 糨糊：四角壓深一點，紙是糊上去的不是釘上去的 */
+  for(const [gx,gy] of [[0,0],[w,0],[0,h],[w,h]]){
+    const gr=g.createRadialGradient(gx,gy,1,gx,gy,Math.min(w,h)*0.38);
+    gr.addColorStop(0,`rgba(94,70,38,${0.13+a*0.06})`);
+    gr.addColorStop(1,'rgba(0,0,0,0)');
+    g.fillStyle=gr;
+    g.save(); fuzzPath(g,0,0,w,h,mulberry32(s.seed+5)); g.clip();
+    g.fillRect(0,0,w,h); g.restore();
+  }
+  return {canvas:c,pad:PP};
+}
+const FAM='"Kaiti SC","STKaiti",KaiTi,"楷体","Songti SC","Noto Serif SC","STSong",SimSun,serif';
+
+function roundRect(g,x,y,w,h,r){
+  g.beginPath();
+  g.moveTo(x+r,y); g.lineTo(x+w-r,y); g.quadraticCurveTo(x+w,y,x+w,y+r);
+  g.lineTo(x+w,y+h-r); g.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  g.lineTo(x+r,y+h); g.quadraticCurveTo(x,y+h,x,y+h-r);
+  g.lineTo(x,y+r); g.quadraticCurveTo(x,y,x+r,y); g.closePath();
+}
+// 宣紙的邊是毛的，不是撕開的鋸齒——幅度比撕邊小一半
+function fuzzPath(g,x,y,w,h,rnd){
+  const step=13;
+  g.beginPath(); g.moveTo(x,y);
+  const edge=(x1,y1,x2,y2)=>{
+    const len=Math.hypot(x2-x1,y2-y1), n=Math.max(3,Math.round(len/step));
+    for(let i=1;i<=n;i++){
+      const t=i/n, nx=-(y2-y1)/len, ny=(x2-x1)/len;
+      const j=(i===n?0:(rnd()*2-1)*1.3);
+      g.lineTo(lerp(x1,x2,t)+nx*j, lerp(y1,y2,t)+ny*j);
+    }
+  };
+  edge(x,y,x+w,y); edge(x+w,y,x+w,y+h); edge(x+w,y+h,x,y+h); edge(x,y+h,x,y);
+  g.closePath();
+}
+
+function renderStrip(s){
+  const paper=paperCanvas(s);
+  const blur=7, off=3.2;
+  const pad=Math.ceil(paper.pad+blur+off+3);
+  const c=document.createElement('canvas');
+  c.width=Math.ceil((s.w+pad*2)*S); c.height=Math.ceil((s.h+pad*2)*S);
+  const g=c.getContext('2d');
+  g.scale(S,S); g.translate(pad,pad);
+  g.shadowColor=T.shadow+'0.34)'; g.shadowBlur=blur;
+  g.shadowOffsetX=off*0.4; g.shadowOffsetY=off;
+  g.drawImage(paper.canvas,-paper.pad,-paper.pad,s.w+paper.pad*2,s.h+paper.pad*2);
+  return {canvas:c,pad:pad};
+}
+
+/* ---------- 牆與地 ---------- */
+let bg=null;
+function makeBG(){
+  const c=document.createElement('canvas');
+  c.width=W; c.height=H;
+  const g=c.getContext('2d');
+  const r=mulberry32(9137);
+  g.fillStyle=T.wall; g.fillRect(0,0,W,brickTop+6);
+  // 夯土/灰泥：大塊斑駁 + 水痕 + 細裂
+  for(let i=0;i<150;i++){
+    const x=r()*W,y=r()*brickTop,rad=lerp(70,380,r());
+    const gr=g.createRadialGradient(x,y,4,x,y,rad);
+    gr.addColorStop(0,r()<0.5?`rgba(255,250,232,${0.035+r()*0.045})`:`rgba(92,68,40,${0.035+r()*0.06})`);
+    gr.addColorStop(1,'rgba(0,0,0,0)');
+    g.fillStyle=gr; g.fillRect(0,0,W,brickTop);
+  }
+  for(let i=0;i<44000;i++){
+    g.fillStyle=`rgba(88,66,40,${r()*0.075})`;
+    g.fillRect(r()*W,r()*brickTop,1,1);
+  }
+  // 水從上往下流的痕
+  for(let i=0;i<34;i++){
+    const x=r()*W, wd=lerp(3,14,r()), top=r()*brickTop*0.35, len=brickTop*(0.18+r()*0.5);
+    const gr=g.createLinearGradient(0,top,0,top+len);
+    gr.addColorStop(0,'rgba(0,0,0,0)');
+    gr.addColorStop(0.25,`rgba(84,62,34,${0.035+r()*0.035})`);
+    gr.addColorStop(1,'rgba(0,0,0,0)');
+    g.fillStyle=gr; g.fillRect(x,top,wd,len);
+  }
+  g.strokeStyle='rgba(74,56,34,.07)'; g.lineWidth=1;
+  for(let i=0;i<11;i++){
+    let x=r()*W,y=r()*brickTop*0.92;
+    g.beginPath(); g.moveTo(x,y);
+    for(let k=0;k<18;k++){x+=(r()*2-1)*15;y+=r()*16;g.lineTo(x,y);}
+    g.stroke();
+  }
+  // 一盞燈，偏左上
+  const LX=MX+SW*0.42, LY=MT+SH*0.32;
+  const lg=g.createRadialGradient(LX,LY,10,LX,LY,Math.max(W,H)*0.44);
+  lg.addColorStop(0,T.lamp); lg.addColorStop(0.42,T.lampMid); lg.addColorStop(1,'rgba(0,0,0,0)');
+  g.fillStyle=lg; g.fillRect(0,0,W,brickTop+6);
+  const dg=g.createLinearGradient(W,0,LX,brickTop);
+  dg.addColorStop(0,T.shadow+'0.20)'); dg.addColorStop(1,'rgba(0,0,0,0)');
+  g.fillStyle=dg; g.fillRect(0,0,W,brickTop+6);
+
+  // 青磚：一條矮矮的地腳，給畫面一個底
+  g.fillStyle=T.brick; g.fillRect(0,brickTop,W,H-brickTop);
+  const bh=Math.round((H-brickTop)/3), bw=118;
+  for(let row=0,y=brickTop;y<H;row++,y+=bh){
+    for(let x=(row%2?-bw/2:0);x<W;x+=bw){
+      g.fillStyle=mix(T.brick,r()<0.5?'#ffffff':'#000000',0.03+r()*0.07);
+      g.fillRect(x+1.5,y+1.5,bw-3,bh-3);
+    }
+  }
+  const fg=g.createLinearGradient(0,brickTop,0,H);
+  fg.addColorStop(0,T.shadow+'0.42)'); fg.addColorStop(0.3,T.shadow+'0.10)');
+  fg.addColorStop(1,'rgba(255,246,226,.05)');
+  g.fillStyle=fg; g.fillRect(0,brickTop,W,H-brickTop);
+  g.fillStyle=T.brickDark; g.fillRect(0,brickTop-2,W,3);
+
+  const vg=g.createRadialGradient(W*0.42,H*0.4,Math.min(W,H)*0.3,W*0.42,H*0.4,Math.max(W,H)*0.8);
+  vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,T.vig);
+  g.fillStyle=vg; g.fillRect(0,0,W,H);
+  return c;
+}
+
+/* ---------- 灰塵 ---------- */
+let dust=[], dustN=0;
+function makeDust(){
+  const r=mulberry32(77); dust=[]; dustN=REDUCE?0:70;
+  for(let i=0;i<dustN;i++)dust.push({x:r()*W,y:r()*H,z:0.3+r()*0.9,
+    vx:(r()*2-1)*6,vy:-2-r()*6,ph:r()*6.28});
+}
+
+/* ---------- 聲音：五聲音階的磬 ---------- */
+let AC=null, soundOn=true, drone=null;
+const PENTA=[0,2,4,7,9];                       // 宮商角徵羽
+function note(i){
+  // 一張一聲，順著五聲音階往上走，貼滿正好走完幾個八度
+  const deg=i%5, oct=((i/5)|0)%3;
+  return 220*Math.pow(2,(PENTA[deg]+oct*12)/12);
+}
+function chime(freq,gain){
+  if(!AC||!soundOn)return;
+  const t=AC.currentTime;
+  const g=AC.createGain();
+  g.gain.setValueAtTime(0,t);
+  g.gain.linearRampToValueAtTime(gain,t+0.006);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+2.2);
+  g.connect(AC.destination);
+  // 磬：基音 + 一個微微失諧的泛音，衰減快而尾巴長
+  [[1,1],[2.76,0.24],[5.4,0.08]].forEach(([m,a])=>{
+    const o=AC.createOscillator(), og=AC.createGain();
+    o.type='sine'; o.frequency.value=freq*m;
+    og.gain.value=a;
+    o.connect(og).connect(g); o.start(t); o.stop(t+2.3);
+  });
+}
+function rustle(dur,gain,f){
+  if(!AC||!soundOn)return;
+  const len=Math.floor(AC.sampleRate*dur);
+  const b=AC.createBuffer(1,len,AC.sampleRate), d=b.getChannelData(0);
+  for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/len,2.4);
+  const s=AC.createBufferSource(); s.buffer=b;
+  const bp=AC.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=f||2300; bp.Q.value=0.7;
+  const g=AC.createGain(); g.gain.value=gain;
+  s.connect(bp).connect(g).connect(AC.destination); s.start();
+}
+function bell(){
+  if(!AC||!soundOn)return;
+  const t=AC.currentTime, g=AC.createGain();
+  g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(0.16,t+0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+7);
+  g.connect(AC.destination);
+  [[1,1],[2.02,0.4],[2.99,0.2],[4.1,0.09]].forEach(([m,a])=>{
+    const o=AC.createOscillator(), og=AC.createGain();
+    o.type='sine'; o.frequency.value=110*m; og.gain.value=a;
+    o.connect(og).connect(g); o.start(t); o.stop(t+7.1);
+  });
+}
+function droneOn(){
+  if(!AC||!soundOn||drone)return;
+  const t=AC.currentTime, g=AC.createGain();
+  g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(0.05,t+2.4);
+  g.connect(AC.destination);
+  const os=[110,165,220.5].map(f=>{const o=AC.createOscillator();o.type='sine';
+    o.frequency.value=f;o.connect(g);o.start(t);return o;});
+  drone={g,os};
+}
+function droneOff(){
+  if(!drone)return;
+  const t=AC.currentTime;
+  drone.g.gain.cancelScheduledValues(t);
+  drone.g.gain.setValueAtTime(drone.g.gain.value,t);
+  drone.g.gain.linearRampToValueAtTime(0,t+1.6);
+  drone.os.forEach(o=>o.stop(t+1.8));
+  drone=null;
+}
+function wakeAudio(){ if(!AC){const C=window.AudioContext||window.webkitAudioContext; if(C)AC=new C();} }
+
+/* ---------- 狀態 ----------
+   count 是唯一的狀態量。phase 只管貼滿之後那段。 */
+let count=0, playing=!REDUCE, phase='fill', pT=0;
+const PASTE_EVERY=1.05;                        // 秒 / 張
+let sinceLast=0;
+
+const scrub=document.getElementById('scrub');
+const countEl=document.getElementById('count');
+const hanEl=document.getElementById('han');
+scrub.min=0; scrub.max=N; scrub.step=1; scrub.value=0;
+
+function paste(n){
+  if(count>=N)return;
+  const s=strips[count];
+  count++;
+  scrub.value=count;
+  if(!REDUCE){
+    s.anim={t0:performance.now(),dur:0.52+Math.random()*0.16,
+            dx:(Math.random()*2-1)*30, dy:-34-Math.random()*26, rot:(Math.random()*2-1)*0.16};
+  }
+  rustle(0.26,0.045,2300);
+  chime(note(count-1),0.09);
+  if(count>=N) enterFull();
+  markDirty();
+}
+function unpaste(){ if(count>0){count--;scrub.value=count;markDirty();} }
+function setCount(n){
+  n=clamp(n|0,0,N);
+  if(n===count)return;
+  count=n; scrub.value=n; follow=true;
+  for(const s of strips)s.anim=null;
+  if(count>=N&&phase==='fill')enterFull(); else if(count<N){phase='fill';pT=0;droneOff();}
+  markDirty();
+}
+function enterFull(){ phase='full'; pT=0; bell(); }
+function reset(){
+  count=0; scrub.value=0; phase='fill'; pT=0; sinceLast=0; follow=true;
+  for(const s of strips)s.anim=null;
+  droneOff(); markDirty();
+}
+
+/* ---------- 鏡頭與光 ----------
+   走向光明：鏡頭往燈那邊推進，紙由光心往外化掉，
+   暗角反過來變成從中心漲開的光。四個字最後也散掉。 */
+let camZ=1, panX=0, panY=0, lightT=0, beat=0;
+let tZ=1, tPX=0, tPY=0, follow=true;
+const LAMP=()=>[MX+SW*0.42, MT+SH*0.32];       // 燈的世界坐標，與 makeBG 同一處
+function focusScreen(){ const L=LAMP(); return w2s(L[0],L[1]); }
+// 鏡頭目標：貼的時候近景跟著最新那張；拉遠時回到全景；推進時走向燈
+function aimCamera(){
+  if(phase==='fill'){
+    tZ=fillZ;
+    if(follow){
+      // 只跟縱向：新貼的那一行落在畫面偏下，上方留給已經貼好的那一片
+      const rowIdx=Math.max(0,Math.ceil(count/cols)-1);
+      const visH=cv.clientHeight/(scale*tZ);
+      const p=panTo(W/2, MT+rowIdx*ROWH+ROWH/2-visH*0.30, tZ);
+      tPX=p[0]; tPY=p[1];
+    }
+  }else if(phase==='full'){
+    tZ=1; const p=panTo(W/2,(MT+SH/2+BRICK_H*0.5),1); tPX=p[0];tPY=p[1];
+  }else{
+    const e=lightT*lightT*(3-2*lightT);
+    tZ=1+e*0.85;
+    const L=LAMP(), p=panTo(L[0],L[1],tZ);
+    tPX=p[0]*e; tPY=p[1]*e;
+  }
+}
+
+/* ---------- 幀 ---------- */
+let last=performance.now(), dirty=true, drawnAt=0;
+const markDirty=()=>{dirty=true;};
+
+function frame(now){
+  requestAnimationFrame(frame);
+  const dt=Math.min(0.05,(now-last)/1000); last=now;
+
+  let busy=playing||!!drag||phase!=='fill';
+  for(const s of strips) if(s.anim){busy=true;break;}
+  if(!busy&&!dirty)return;
+  if(busy&&!dirty&&phase==='fill'&&now-drawnAt<31)return;
+  drawnAt=now; dirty=false;
+
+  /* 推進 */
+  if(phase==='fill'){
+    lightT=0; beat=0;
+    if(playing&&count<N){
+      sinceLast+=dt;
+      if(sinceLast>=PASTE_EVERY){sinceLast=0;paste();}
+    }
+  }else{
+    pT+=dt;
+    if(phase==='full'){
+      // 先花一秒多把鏡頭拉遠交出全貌，再讓四個字浮起來
+      beat=clamp((pT-1.5)/1.1,0,1);
+      if(pT>4.4){phase='dissolve';pT=0;droneOn();}
+    }else if(phase==='dissolve'){
+      lightT=clamp(pT/4.6,0,1)*0.92;
+      beat=1-clamp((pT-0.2)/0.9,0,1);
+      if(pT>4.6){phase='light';pT=0;}
+    }else if(phase==='light'){
+      lightT=0.92;
+      beat=clamp(pT/1.1,0,1);                  // 為道日損 浮起
+      if(pT>3.4){phase='fade';pT=0;}
+    }else if(phase==='fade'){
+      beat=1-clamp(pT/1.2,0,1);
+      lightT=0.92*(1-clamp((pT-0.7)/1.6,0,1));
+      if(pT>2.7){droneOff();reset();}
+    }
+  }
+
+  /* 鏡頭：目標由 phase 決定，實際位置彈簧跟過去。
+     REDUCE 下不做彈簧，直接到位——但拉遠與推進本身保留，
+     否則整件作品的下半場就沒有了。 */
+  aimCamera();
+  const k=REDUCE?1:(phase==='fill'?0.055:0.075);
+  camZ+=(tZ-camZ)*k; panX+=(tPX-panX)*k; panY+=(tPY-panY)*k;
+
+  /* 背景 */
+  const cw=cv.clientWidth, ch=cv.clientHeight, dpr=cv.width/cw;
+  if(!bg){
+    const src=makeBG();
+    const d=document.createElement('canvas');
+    d.width=Math.ceil(W*scale*dpr); d.height=Math.ceil(H*scale*dpr);
+    d.getContext('2d').drawImage(src,0,0,d.width,d.height);
+    bg=d;
+  }
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.fillStyle=T.wall; ctx.fillRect(0,0,cw,ch);
+  const o=w2s(0,0);
+  ctx.drawImage(bg,o[0],o[1],W*scale*camZ,H*scale*camZ);   // bg 已按 scale 預縮放，camZ 再乘上去
+
+  /* 灰塵 */
+  if(dustN&&lightT<0.9){
+    const t=now/1000;
+    ctx.globalAlpha=1-lightT;
+    for(const p of dust){
+      p.x+=p.vx*dt; p.y+=p.vy*dt+Math.sin(t*0.7+p.ph)*0.22;
+      if(p.y<-10){p.y=H+10;p.x=Math.random()*W;}
+      if(p.x<-10)p.x=W+10; if(p.x>W+10)p.x=-10;
+      const s2=w2s(p.x,p.y), rr=p.z*1.4*Math.max(scale*camZ,0.35);
+      ctx.fillStyle=T.dust+(0.05+p.z*0.13)+')';
+      ctx.fillRect(s2[0]-rr,s2[1]-rr,rr*2,rr*2);
+    }
+    ctx.globalAlpha=1;
+  }
+
+  /* 紙：按貼上的順序畫，後貼的壓住先貼的 */
+  const fs=focusScreen();
+  for(let i=0;i<count;i++) drawStrip(strips[i],now,fs);
+
+  /* 光 */
+  if(lightT>0.001) drawLight(fs,now);
+
+  /* 四個字 */
+  if(beat>0.004){
+    const txt=(phase==='fill'||phase==='full')?BEAT_A:BEAT_B;
+    drawBeat(txt,beat,phase==='light'||phase==='fade');
+  }
+
+  /* 讀數 */
+  countEl.textContent=count+' / '+N;
+  hanEl.textContent=han(count);
+}
+
+function drawStrip(s,now,fs){
+  const key=themeName+'|'+Math.round(S*100);
+  if(s.key!==key||!s.cache){ s.cache=renderStrip(s); s.key=key; }
+  const c=s.cache;
+  let x=s.x,y=s.y,rot=s.rot,al=1;
+
+  if(s.anim){
+    const p=clamp((now-s.anim.t0)/(s.anim.dur*1000),0,1);
+    if(p>=1){s.anim=null;}
+    else{
+      const e=1-Math.pow(1-p,3);
+      x+=s.anim.dx*(1-e); y+=s.anim.dy*(1-e);
+      rot+=s.anim.rot*(1-e);
+      al=clamp(p*2.4,0,1);
+    }
+  }
+
+  const sp=w2s(x,y);
+  const R=(Math.max(s.w,s.h)*0.8+40)*scale*camZ;
+  if(sp[0]+R<0||sp[0]-R>cv.clientWidth||sp[1]+R<0||sp[1]-R>cv.clientHeight)return;
+
+  // 化進光裡：離光心近的先走
+  if(lightT>0){
+    const d=Math.hypot(sp[0]-fs[0],sp[1]-fs[1]);
+    const maxD=Math.hypot(cv.clientWidth,cv.clientHeight)*0.9;
+    const delay=clamp(d/maxD,0,1)*0.72;
+    const gone=clamp((lightT-delay)/0.50,0,1);
+    al*=1-gone;
+    if(al<=0.004)return;
+    // 往光心飄一點
+    const pull=gone*0.16;
+    sp[0]+=(fs[0]-sp[0])*pull; sp[1]+=(fs[1]-sp[1])*pull;
+  }
+
+  const sc=scale*camZ;
+  const dw=(s.w+c.pad*2)*sc, dh=(s.h+c.pad*2)*sc;
+  ctx.save();
+  ctx.globalAlpha=al;
+  ctx.translate(sp[0],sp[1]); ctx.rotate(rot);
+  ctx.drawImage(c.canvas,-dw/2,-dh/2,dw,dh);
+  ctx.restore();
+}
+
+function drawLight(fs,now){
+  const cw=cv.clientWidth, ch=cv.clientHeight;
+  const e=lightT;
+  const maxR=Math.hypot(cw,ch)*1.05;
+  // 從光心漲開的暖光
+  const gr=ctx.createRadialGradient(fs[0],fs[1],0,fs[0],fs[1],Math.max(1,maxR*(0.12+e*1.05)));
+  gr.addColorStop(0,T.glow);
+  gr.addColorStop(clamp(0.42+e*0.3,0,0.95),`rgba(255,238,206,${0.62*e})`);
+  gr.addColorStop(1,'rgba(255,232,196,0)');
+  ctx.globalAlpha=clamp(e*1.15,0,1);
+  ctx.fillStyle=gr; ctx.fillRect(0,0,cw,ch);
+  ctx.globalAlpha=1;
+  // 光束：慢慢轉的柔和扇形
+  const rayFade=Math.max(0,1-Math.max(0,(e-0.52)/0.34));   // 光洗上來之後扇形必須退場
+  if(e>0.16&&rayFade>0.01&&!REDUCE){
+    const t=now/1000;
+    ctx.save();
+    ctx.translate(fs[0],fs[1]);
+    ctx.globalCompositeOperation='lighter';
+    for(let i=0;i<5;i++){
+      const a0=t*0.04+i*(6.2832/5);
+      const wd=0.30+0.13*Math.sin(t*0.31+i*1.7);
+      // 從中心往外一段才起亮，扇形的尖端就不會是一個硬點
+      const g2=ctx.createRadialGradient(0,0,maxR*0.05,0,0,maxR);
+      g2.addColorStop(0,'rgba(255,246,222,0)');
+      g2.addColorStop(0.30,`rgba(255,246,222,${0.085*(e-0.16)*rayFade})`);
+      g2.addColorStop(1,'rgba(255,246,222,0)');
+      ctx.fillStyle=g2;
+      ctx.beginPath(); ctx.moveTo(0,0);
+      ctx.arc(0,0,maxR,a0-wd,a0+wd); ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+    ctx.globalCompositeOperation='source-over';
+  }
+  // 最後洗白
+  if(e>0.68){
+    const k=(e-0.68)/0.32;
+    ctx.globalAlpha=k*0.60;
+    ctx.fillStyle=T.glow; ctx.fillRect(0,0,cw,ch);
+    ctx.globalAlpha=k*0.5;
+    const g3=ctx.createRadialGradient(fs[0],fs[1],0,fs[0],fs[1],maxR*0.62);
+    g3.addColorStop(0,'rgba(255,255,252,.9)');
+    g3.addColorStop(0.55,'rgba(255,246,226,0)');
+    g3.addColorStop(1,'rgba(196,172,132,.28)');   // 四周略沉，畫面才不是一塊平色
+    ctx.fillStyle=g3; ctx.fillRect(0,0,cw,ch);
+    ctx.globalAlpha=1;
+  }
+}
+
+function drawBeat(txt,a,onLight){
+  const cw=cv.clientWidth, ch=cv.clientHeight;
+  const size=Math.min(cw*0.062,ch*0.088);
+  const step=size*1.18;
+  ctx.save();
+  ctx.globalAlpha=clamp(a,0,1)*(onLight?0.80:0.72);
+  ctx.fillStyle=onLight?'#3B2E1E':T.ink;
+  if(!onLight){
+    // 先在字後面點一團光，字才像從牆裡透出來，不是蓋在牆上
+    const gr=ctx.createRadialGradient(cw/2,ch/2,size*0.4,cw/2,ch/2,size*3.4);
+    gr.addColorStop(0,`rgba(255,250,236,${0.5*a})`);
+    gr.addColorStop(1,'rgba(255,250,236,0)');
+    ctx.fillStyle=gr; ctx.fillRect(0,0,cw,ch);
+    ctx.fillStyle=T.ink;
+    ctx.shadowColor='rgba(255,250,238,.7)'; ctx.shadowBlur=size*0.7;
+  }
+  ctx.font=`500 ${size}px ${FAM}`;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  const chars=Array.from(txt);
+  const y0=ch/2-(chars.length-1)*step/2;
+  chars.forEach((c,i)=>ctx.fillText(c,cw/2,y0+i*step+(1-a)*10));
+  ctx.restore();
+}
+
+/* ---------- 無障礙文本 ---------- */
+const altlist=document.getElementById('altlist');
+LINES.forEach(([ch,text])=>{
+  const li=document.createElement('li');
+  li.textContent=text+'（第'+han(ch)+'章）';
+  altlist.appendChild(li);
+});
+
+/* ---------- 交互 ---------- */
+let drag=null, moved=false;
+cv.addEventListener('pointerdown',e=>{
+  wakeAudio(); cv.setPointerCapture(e.pointerId);
+  drag={x:e.clientX,y:e.clientY,px:panX,py:panY}; moved=false;
+  cv.classList.add('drag'); markDirty();
+});
+cv.addEventListener('pointermove',e=>{
+  if(!drag)return;
+  const dx=e.clientX-drag.x, dy=e.clientY-drag.y;
+  if(Math.abs(dx)+Math.abs(dy)>4)moved=true;
+  follow=false;
+  const b=panBounds(camZ);
+  panX=clamp(drag.px+dx,-b[0],b[0]); panY=clamp(drag.py+dy,-b[1],b[1]);
+  tPX=panX; tPY=panY; markDirty();
+});
+cv.addEventListener('pointerup',()=>{
+  cv.classList.remove('drag');
+  const wasDrag=moved; drag=null;
+  if(!wasDrag&&phase==='fill'){ paste(); sinceLast=0; hideHint(); }
+});
+
+let hintTimer=setTimeout(hideHint,12000);
+function hideHint(){document.getElementById('hint').classList.add('gone');clearTimeout(hintTimer);}
+
+const playBtn=document.getElementById('play');
+playBtn.textContent=playing?'Pause':'Play';
+playBtn.setAttribute('aria-pressed',String(playing));
+playBtn.onclick=()=>{playing=!playing;wakeAudio();markDirty();
+  playBtn.textContent=playing?'Pause':'Play';
+  playBtn.setAttribute('aria-pressed',String(playing));};
+
+document.getElementById('fill').onclick=()=>{
+  wakeAudio(); hideHint();
+  if(phase!=='fill'){reset();}
+  // 快速鋪滿：一張一張帶聲音地上去，但間隔很短
+  let k=count;
+  const step=()=>{ if(k>=N||phase!=='fill')return; paste(); k=count;
+    if(k<N)setTimeout(step,REDUCE?0:54); };
+  step();
+};
+document.getElementById('again').onclick=()=>{wakeAudio();reset();hideHint();};
+
+const lightsBtn=document.getElementById('lights');
+function setTheme(name){
+  themeName=name; T=THEMES[name]; bg=null;
+  for(const s of strips)s.cache=null;
+  lightsBtn.textContent=name==='dark'?'Lights on':'Lights out';
+  lightsBtn.setAttribute('aria-pressed',String(name==='dark'));
+  markDirty();
+}
+setTheme(themeName);
+lightsBtn.onclick=()=>setTheme(themeName==='dark'?'light':'dark');
+
+const soundBtn=document.getElementById('sound');
+soundBtn.onclick=()=>{soundOn=!soundOn;wakeAudio();
+  if(!soundOn)droneOff();
+  soundBtn.textContent=soundOn?'Sound off':'Sound on';
+  soundBtn.setAttribute('aria-pressed',String(soundOn));};
+
+scrub.addEventListener('input',()=>{ setCount(+scrub.value); });
+
+addEventListener('keydown',e=>{
+  const tag=e.target&&e.target.tagName;
+  if(e.target===scrub)return;
+  if(e.code==='Space'&&tag==='BUTTON')return;
+  if(e.key==='ArrowRight'){ if(phase==='fill'){paste();sinceLast=0;} e.preventDefault(); }
+  else if(e.key==='ArrowLeft'){ unpaste(); e.preventDefault(); }
+  else if(e.code==='Space'){ playBtn.click(); e.preventDefault(); }
+  else if(e.key==='f'||e.key==='F'){ document.getElementById('fill').click(); }
+  else if(e.key==='r'||e.key==='R'){ document.getElementById('again').click(); }
+});
+
+/* ---------- 尺寸 ---------- */
+function resize(){
+  const dpr=Math.min(2,devicePixelRatio||1);
+  cv.width=Math.round(cv.clientWidth*dpr);
+  cv.height=Math.round(cv.clientHeight*dpr);
+  layout();
+  S=clamp(scale*dpr,0.9,2.2);
+  bg=null;                                   // 世界尺寸變了，牆要重烤
+  for(const s of strips)s.cache=null;
+  makeDust(); markDirty();
+}
+addEventListener('resize',resize);
+resize();
+// 字體沒就緒時先渲的位圖會用錯字體，而且不報錯。渲完再作廢一次。
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>{
+  for(const s of strips)s.cache=null; markDirty();
+});
+requestAnimationFrame(frame);
+
+})();
+</script>
+</body>
+</html>
