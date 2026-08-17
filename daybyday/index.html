@@ -85,7 +85,7 @@
      it one after another; each new strip overlaps the ones already there, and the earliest strips
      are the most yellowed. When the last one goes up the wall reads 為學日益 — day by day it
      increases — and then every strip dissolves into light and the wall reads 為道日損 — day by day
-     it diminishes. Both halves are from chapter 48. The lines, in order:</p>
+     it diminishes. Both halves are from chapter 48. One line from each of the 81 chapters, in order:</p>
   <ol id="altlist" lang="zh-Hant"></ol>
   <p>Text: Laozi, <i lang="zh-Hant">道德經</i>, public domain.
      <b>Tony Xin</b>, <time datetime="2026-08-17">2026-08-17</time></p>
@@ -105,10 +105,14 @@
    貼上的過場動畫只疊在最新那一張上。
 
    ── 原文說明（維護用，不是頁面內容）────────────────────────
-   紙上的文字是《道德經》通行本的名句，繁體。這批文字**未能在製作環境裡
-   對著權威版本逐字核對**（出網受限，ctext / 維基文库 / Gutenberg 均不可達）。
+   八十一章，每章取一句，章序即貼上的順序。
+   底本由 Tony 提供（簡體通行本全文），逐句核對後轉為繁體。
+   轉換只涉及一對一的字，沒有碰到「一簡多繁」的歧義字
+   （后/後、發/髮、乾/幹、里/裡、雲/云 這幾類都不在這批句子裡）；
+   「于」按傳統刻本作「於」。
+   校對中改掉兩處我自己的錯：第四十章漏了逗號（應作「反者，道之動」）、
+   第五十九章多了逗號（應作「治人事天莫若嗇」）。
    全部集中在下面 LINES 一處，替換整批只需改這一個數組。
-   發佈前應對照印本或 ctext.org 校一遍。
    ──────────────────────────────────────────────────────────
 
    性能上沿用前一件作品實測出來的三條：
@@ -144,56 +148,86 @@ function mix(c1,c2,t){const a=hex(c1),b=hex(c2);
 /* ---------- 原文 ---------- */
 const LINES=[
   [1,'道可道，非常道'],
-  [1,'玄之又玄，眾妙之門'],
   [2,'有無相生，難易相成'],
+  [3,'為無為，則無不治'],
+  [4,'挫其銳，解其紛'],
   [5,'天地不仁，以萬物為芻狗'],
-  [5,'多言數窮，不如守中'],
+  [6,'綿綿若存，用之不勤'],
   [7,'天長地久'],
   [8,'上善若水'],
   [9,'金玉滿堂，莫之能守'],
+  [10,'專氣致柔，能嬰兒乎'],
   [11,'有之以為利，無之以為用'],
   [12,'五色令人目盲'],
   [13,'寵辱若驚'],
+  [14,'執古之道，以御今之有'],
+  [15,'敦兮其若樸，曠兮其若谷'],
   [16,'致虛極，守靜篤'],
-  [16,'知常曰明'],
+  [17,'功成事遂，百姓皆謂我自然'],
   [18,'大道廢，有仁義'],
-  [19,'見素抱樸'],
-  [22,'少則得，多則惑'],
-  [22,'曲則全'],
+  [19,'見素抱樸，少私寡欲'],
+  [20,'我獨異於人，而貴食母'],
+  [21,'其精甚真，其中有信'],
+  [22,'曲則全，枉則直'],
+  [23,'希言自然'],
+  [24,'企者不立，跨者不行'],
   [25,'人法地，地法天，天法道，道法自然'],
   [26,'重為輕根，靜為躁君'],
-  [28,'復歸於樸'],
+  [27,'善行無轍跡，善言無瑕謫'],
+  [28,'知其雄，守其雌'],
+  [29,'去甚，去奢，去泰'],
+  [30,'物壯則老'],
+  [31,'兵者，不祥之器'],
+  [32,'譬道之在天下，猶川谷之於江海'],
   [33,'知人者智，自知者明'],
-  [33,'知足者富'],
+  [34,'以其終不自為大，故能成其大'],
+  [35,'淡乎其無味'],
   [36,'柔弱勝剛強'],
+  [37,'不欲以靜，天下將自定'],
   [38,'上德不德，是以有德'],
-  [40,'反者道之動'],
-  [41,'大方無隅，大器晚成'],
+  [39,'貴以賤為本，高以下為基'],
+  [40,'反者，道之動'],
   [41,'大音希聲，大象無形'],
   [42,'道生一，一生二，二生三，三生萬物'],
   [43,'天下之至柔，馳騁天下之至堅'],
   [44,'知足不辱，知止不殆'],
-  [45,'大成若缺，其用不弊'],
   [45,'大直若屈，大巧若拙'],
   [46,'知足之足，常足矣'],
   [47,'不出戶，知天下'],
-  [48,'無為而無不為'],
+  [48,'損之又損，以至於無為'],
   [49,'聖人無常心，以百姓心為心'],
   [50,'出生入死'],
+  [51,'生而不有，為而不恃'],
+  [52,'見小曰明，守柔曰強'],
+  [53,'大道甚夷，而民好徑'],
+  [54,'修之於身，其德乃真'],
   [55,'含德之厚，比於赤子'],
   [56,'知者不言，言者不知'],
-  [59,'治人事天，莫若嗇'],
+  [57,'我無為而民自化'],
+  [58,'禍兮福之所倚，福兮禍之所伏'],
+  [59,'治人事天莫若嗇'],
   [60,'治大國若烹小鮮'],
+  [61,'大者宜為下'],
+  [62,'道者萬物之奧'],
+  [63,'天下大事必作於細'],
   [64,'千里之行，始於足下'],
-  [64,'為之於未有，治之於未亂'],
-  [67,'不敢為天下先'],
+  [65,'玄德深矣，遠矣'],
+  [66,'以其善下之，故能為百谷王'],
+  [67,'不敢為天下先，故能成器長'],
+  [68,'善用人者為之下'],
+  [69,'禍莫大於輕敵'],
+  [70,'知我者希，則我者貴'],
+  [71,'知不知，上'],
+  [72,'聖人自知，不自見'],
   [73,'天網恢恢，疏而不失'],
   [74,'民不畏死，奈何以死懼之'],
+  [75,'夫唯無以生為者，是賢於貴生'],
   [76,'人之生也柔弱，其死也堅強'],
+  [77,'天之道，損有餘而補不足'],
   [78,'天下莫柔弱於水'],
-  [80,'甘其食，美其服'],
+  [79,'天道無親，常與善人'],
+  [80,'甘其食，美其服，安其居，樂其俗'],
   [81,'信言不美，美言不信'],
-  [81,'天之道，利而不害'],
 ];
 const N=LINES.length;
 const SEAL='道';                       // 印文
@@ -258,8 +292,20 @@ let MX=430, MT=150, MB=130;   // 由 layout 按可見範圍反推
 let cols=13, rows=4, SW=0, SH=0, W=0, H=0, brickTop=0;
 let scale=1, fillZ=1.8;
 
-// 近景時一個字該有多少屏幕像素——列數從這裡反推
+// 近景時一個字該有多少屏幕像素
 function targetPx(cw){ return cw<520?17:cw<900?21:24; }
+/* 列數由「整片條幅區的比例接近畫面比例」決定。
+   八十一章之下這條不能讓：讓給可讀性的那一版，全景時字只佔畫幅 38% 寬，
+   左邊一大片空牆，高潮就沒了。可讀性交給 fillZ，代價是要橫向平移。 */
+function pickCols(cw,ch){
+  const A=cw/ch; let best=8,bestErr=1e9;
+  for(let c=5;c<=24;c++){
+    const r=Math.ceil(N/c);
+    const err=Math.abs((c*CW)/(r*ROWH+BRICK_H)-A);
+    if(err<bestErr){bestErr=err;best=c;}
+  }
+  return best;
+}
 
 const strips=LINES.map(([ch,text],i)=>{
   const m=measureStrip(text);
@@ -273,7 +319,7 @@ const strips=LINES.map(([ch,text],i)=>{
 function layout(){
   const cw=cv.clientWidth||1, ch=cv.clientHeight||1;
   const esFill=targetPx(cw)/FS;              // 近景需要的有效縮放
-  cols=clamp(Math.round((cw/esFill/1.06)/CW),3,20);
+  cols=pickCols(cw,ch);
   rows=Math.ceil(N/cols);
   SW=cols*CW; SH=rows*ROWH;
   scale=Math.min(cw/(SW*1.10), ch/((SH+BRICK_H+70)*1.06));   // camZ=1 → 全景
@@ -609,6 +655,11 @@ function paste(n,quiet){
   }
   rustle(quiet?0.18:0.26,quiet?0.022:0.045,2300);
   chime(note(count-1),quiet?0.035:0.09);
+  // 換行：卷軸從左端一次掃回右端。指數逼近會猛甩，給它一次正經的運鏡。
+  if(count>1 && Math.floor((count-1)/cols)!==Math.floor((count-2)/cols)){
+    aimCamera();
+    camTween={t0:performance.now(),dur:1.15,z0:camZ,px0:panX,py0:panY};
+  }
   if(count>=N) enterFull();
   markDirty();
 }
@@ -645,10 +696,12 @@ function aimCamera(){
   if(phase==='fill'){
     tZ=fillZ;
     if(follow){
-      // 只跟縱向：新貼的那一行落在畫面偏下，上方留給已經貼好的那一片
-      const rowIdx=Math.max(0,Math.ceil(count/cols)-1);
+      // 跟著最新貼的那一張：橫向像卷軸一樣右→左推，縱向讓新的一行落在偏下，
+      // 上方留給已經貼好的那一片。換行那一下由 camTween 走「回車」。
+      const s=strips[Math.max(0,count-1)];
       const visH=cv.clientHeight/(scale*tZ);
-      const p=panTo(W/2, MT+rowIdx*ROWH+ROWH/2-visH*0.30, tZ);
+      const rowIdx=Math.max(0,Math.ceil(count/cols)-1);
+      const p=panTo(s.x+CW*1.6, MT+rowIdx*ROWH+ROWH/2-visH*0.28, tZ);
       tPX=p[0]; tPY=p[1];
     }
   }else if(phase==='full'){
@@ -781,6 +834,9 @@ function frame(now){
 }
 
 function drawStrip(s,now,fs){
+  /* 試過「全景用一張低分辨率位圖」——實測反而更慢（7.8→7.0 draws/s）：
+     瓶頸不在源圖尺寸，而且鏡頭拉遠時跨過閾值會讓八十一張在同一帧全部重渲。
+     已回退。全景真要再快，得整片合成成一張圖，那是另一個量級的改動。 */
   const key=themeName+'|'+Math.round(S*100);
   if(s.key!==key||!s.cache){ s.cache=renderStrip(s); s.key=key; }
   const c=s.cache;
@@ -1014,7 +1070,10 @@ function resize(){
   cv.width=Math.round(cv.clientWidth*dpr);
   cv.height=Math.round(cv.clientHeight*dpr);
   layout();
-  S=clamp(scale*dpr,0.9,2.2);
+  // 按最近視距算，不是按拉遠後的縮放：
+  // 原來 S=scale*dpr，而近景實際顯示在 scale*fillZ*dpr 上——
+  // 於是紙上的字一直被放大 1.5 倍以上，是軟的。截圖上看不出來，量一次就清楚。
+  S=clamp(scale*fillZ*dpr,0.9,2.1);
   bg=null;                                   // 世界尺寸變了，牆要重烤
   for(const s of strips)s.cache=null;
   makeDust(); markDirty();
